@@ -44,7 +44,7 @@ function toMarkdown(r: RunResult): string {
 
 /** End-of-run card: three grades per strategy, key numbers, copy as Markdown. */
 export function Scorecard({ result, onClose }: { result: RunResult; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
   const label = BUILD === 'bench' ? 'Benchmark run' : `Indicative run (${BUILD} build, not a benchmark)`;
 
   return (
@@ -107,12 +107,17 @@ export function Scorecard({ result, onClose }: { result: RunResult; onClose: () 
           type="button"
           className="btn"
           onClick={async () => {
-            await navigator.clipboard.writeText(toMarkdown(result));
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
+            // Some embedded views refuse clipboard writes; say so instead of failing silently.
+            try {
+              await navigator.clipboard.writeText(toMarkdown(result));
+              setCopied('copied');
+            } catch {
+              setCopied('failed');
+            }
+            setTimeout(() => setCopied('idle'), 2000);
           }}
         >
-          {copied ? 'Copied' : 'Copy results'}
+          {copied === 'copied' ? 'Copied' : copied === 'failed' ? 'Clipboard blocked here' : 'Copy results'}
         </button>
         <span className="sc-note">Time to paint is estimated to within about one frame.</span>
       </footer>
