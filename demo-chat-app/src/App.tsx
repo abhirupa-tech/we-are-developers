@@ -5,6 +5,9 @@ import { BUILD, FLAGS, PROFILER_ACTIVE, REACT_VERSION } from './config';
 import { Hud } from './hud/Hud';
 import type { HudController } from './hud/controller';
 import { Scorecard, type RunResult } from './hud/Scorecard';
+import { chatStore } from './live/chatStore';
+import { GeminiSource } from './live/GeminiSource';
+import { LivePane } from './live/LivePane';
 import { calibrateDevice } from './metrics/calibration';
 import { RunCollector } from './metrics/collector';
 import { gradeRun } from './metrics/grades';
@@ -39,6 +42,9 @@ export function App() {
   const [strategy, setStrategy] = useState<StrategyId>('setState');
   const [compare, setCompare] = useState(FLAGS.compare);
   const [presenter, setPresenter] = useState(FLAGS.presenter);
+  /** Live mode: a real Gemini chat in one useSyncExternalStore pane. */
+  const [live, setLive] = useState(FLAGS.live && !FLAGS.compare);
+  const [prompt, setPrompt] = useState('');
   const [ghostsOn, setGhostsOn] = useState(true);
   const [autoProbe, setAutoProbe] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -111,18 +117,18 @@ export function App() {
       });
       setResult({
         outcome,
-        recording: recording?.title ?? view.prompt,
-        rate,
+        recording: live ? view.prompt : (recording?.title ?? view.prompt),
+        rate: live ? 1 : rate,
         compare: view.panes.length > 1,
         hidden: frames?.hidden ?? false,
         deviceMs,
-        expectedMs: (recording?.durationMs ?? 0) / rate,
+        expectedMs: live ? 0 : (recording?.durationMs ?? 0) / rate,
         panes,
       });
       setRun((r) => (r && r.id === view.id ? { ...r, status: outcome === 'done' ? 'done' : outcome, error } : r));
       setAnnounce(outcome === 'done' ? 'Answer complete. Scorecard ready.' : outcome === 'stopped' ? 'Run stopped.' : 'Run failed.');
     },
-    [recording, rate, deviceMs],
+    [recording, rate, deviceMs, live],
   );
 
   const stop = useCallback(() => {
@@ -130,16 +136,29 @@ export function App() {
   }, []);
 
   const start = useCallback(() => {
-    if (!recording) return;
+    const question = prompt.trim();
+    if (live ? !question : !recording) return;
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
     const id = ++runSeq.current;
     const bus = new EventBus();
     const frames = beginRun();
-    const ids: StrategyId[] = compare ? STRATEGIES.map((s) => s.id) : [strategy];
+    const ids: StrategyId[] = live ? ['syncStore'] : compare ? STRATEGIES.map((s) => s.id) : [strategy];
     const panes = ids.map((s, i) => ({ strategy: s, collector: new RunCollector(`run${id}-pane${i}`, s, frames.startedAt) }));
-    const view: RunView = { id, bus, messageId: null, prompt: recording.prompt, panes, status: 'streaming', error: null };
+    const view: RunView = { id, bus, messageId: null, prompt: live ? question : recording!.prompt, panes, status: 'streaming', error: null };
+
+    // Live mode: the question goes into the external store, the store listens
+    // to the stream, and Gemini gets the conversation so far.
+    let runSource = source;
+    if (live) {
+      chatStore.addUserMessage(question);
+      runSource = new GeminiSource(chatStore.getSnapshot());
+      bus.on(RUN_CHANNEL, chatStore.onStreamEvent);
+      setPrompt('');
+    }
+    let errorMessage: string | null = null;
+
     setResult(null);
     setAnnounce('');
     setRun(view);
@@ -151,10 +170,11 @@ export function App() {
     });
 
     runStream(
-      source,
+      runSource,
       bus,
-      { recordingId: recording.id, rate, seed: 1, signal: ac.signal },
+      { recordingId: recording?.id ?? '', rate, seed: 1, signal: ac.signal },
       {
+        onError: (message) => (errorMessage = message),
         onEvent: (e) => {
           if (e.type === 'TEXT_MESSAGE_CONTENT') panes.forEach(({ collector }) => collector.onToken(e.seq, e.arrivedAt));
         },
@@ -163,7 +183,7 @@ export function App() {
       },
     ).then((outcome) => {
       if (outcome === 'aborted') return finalize(view, 'stopped');
-      if (outcome === 'error') return finalize(view, 'error', 'see console for details');
+      if (outcome === 'error') return finalize(view, 'error', errorMessage ?? 'see console for details');
       // Stream finished: wait for every pane to catch up (or give up after 3 s).
       const until = performance.now() + CATCH_UP_MS;
       const waitForPaint = () => {
@@ -177,7 +197,7 @@ export function App() {
       };
       waitForPaint();
     });
-  }, [recording, compare, strategy, source, rate, finalize]);
+  }, [recording, compare, strategy, source, rate, finalize, live, prompt]);
 
   // Bind the pane readouts once the panes for this run are in the DOM.
   useEffect(() => {
@@ -191,22 +211,31 @@ export function App() {
     endRun();
     setRun(null);
     setResult(null);
+    chatStore.clear();
     hud.current?.redraw();
   }, []);
 
   /** Switching strategy (or mode) unmounts the old one and resets the run, keeping ghosts. */
   const switchTo = useCallback(
     (next: StrategyId) => {
-      if (next === strategy) return;
+      if (next === strategy && !live) return;
       reset();
+      setLive(false);
       setStrategy(next);
     },
-    [strategy, reset],
+    [strategy, live, reset],
   );
 
   const toggleCompare = useCallback(() => {
     reset();
+    setLive(false);
     setCompare((c) => !c);
+  }, [reset]);
+
+  const toggleLive = useCallback(() => {
+    reset();
+    setCompare(false);
+    setLive((l) => !l);
   }, [reset]);
 
   const running = run?.status === 'streaming' || run?.status === 'stalled';
@@ -222,6 +251,7 @@ export function App() {
         else start();
       } else if (k === 'r') reset();
       else if (k === 'c') toggleCompare();
+      else if (k === 'l') toggleLive();
       else if (k === 'p') setPresenter((p) => !p);
       else if (k === 'g') {
         setGhostsOn((g) => !g);
@@ -234,12 +264,14 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [switchTo, running, stop, start, reset, toggleCompare]);
+  }, [switchTo, running, stop, start, reset, toggleCompare, toggleLive]);
 
   const getPanes = useCallback(() => runRef.current?.panes.map((p) => p.collector) ?? [], []);
   const showGhosts = useCallback(() => ghostsRef.current, []);
 
   const paneStrategies = compare ? STRATEGIES : [strategyById[strategy]];
+  /** The strategy highlighted in the selector. Live mode always uses the external store. */
+  const shownStrategy: StrategyId = live ? 'syncStore' : strategy;
 
   return (
     <div className={`app ${compare ? 'is-compare' : ''}`}>
@@ -262,9 +294,9 @@ export function App() {
               key={s.id}
               type="button"
               role="radio"
-              aria-checked={compare || s.id === strategy}
+              aria-checked={compare || s.id === shownStrategy}
               data-strategy={s.id}
-              className={compare || s.id === strategy ? 'on' : ''}
+              className={compare || s.id === shownStrategy ? 'on' : ''}
               disabled={compare}
               onClick={() => switchTo(s.id)}
               title={`${s.note} (key ${i + 1})`}
@@ -277,6 +309,9 @@ export function App() {
         <div className="top-actions">
           <button type="button" className={`chip ${compare ? 'on' : ''}`} onClick={toggleCompare} aria-pressed={compare}>
             Compare
+          </button>
+          <button type="button" className={`chip ${live ? 'on' : ''}`} onClick={toggleLive} aria-pressed={live} title="Chat with Gemini through useSyncExternalStore (key L)">
+            Live
           </button>
           <button type="button" className={`chip ${presenter ? 'on' : ''}`} onClick={() => setPresenter((p) => !p)} aria-pressed={presenter}>
             Presenter
@@ -309,7 +344,15 @@ export function App() {
 
       <main className="stage">
         <div className="panes">
-          {paneStrategies.map((s, i) => {
+          {live && (
+            <LivePane
+              collector={run?.panes[0]?.collector ?? null}
+              messageId={run?.messageId ?? null}
+              status={run?.status ?? 'idle'}
+              error={run?.error}
+            />
+          )}
+          {!live && paneStrategies.map((s, i) => {
             const pane = run?.panes[i];
             return (
               <Pane
@@ -331,7 +374,18 @@ export function App() {
       </main>
 
       <footer className="composer">
-        <label className="field">
+        {live && (
+          <form
+            className="flex min-w-60 flex-[2]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              start();
+            }}
+          >
+            <input className="text w-full" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Ask Gemini…" aria-label="Your message" />
+          </form>
+        )}
+        <label className="field" hidden={live}>
           <span className="sr-only">Recording</span>
           <select value={recordingId} onChange={(e) => setRecordingId(e.target.value)} disabled={running}>
             {recordings.map((r) => (
@@ -341,7 +395,7 @@ export function App() {
             ))}
           </select>
         </label>
-        <label className="field">
+        <label className="field" hidden={live}>
           <span className="sr-only">Replay speed</span>
           <select value={rate} onChange={(e) => setRate(Number(e.target.value))} disabled={running}>
             {RATES.map((r) => (
@@ -361,8 +415,8 @@ export function App() {
             Stop
           </button>
         ) : (
-          <button type="button" className="btn btn-go" onClick={start} disabled={!recording}>
-            Start run
+          <button type="button" className="btn btn-go" onClick={start} disabled={live ? !prompt.trim() : !recording}>
+            {live ? 'Send' : 'Start run'}
           </button>
         )}
       </footer>
@@ -437,6 +491,10 @@ export function App() {
                 <kbd>C</kbd>
               </dt>
               <dd>Compare mode</dd>
+              <dt>
+                <kbd>L</kbd>
+              </dt>
+              <dd>Live mode (Gemini chat)</dd>
               <dt>
                 <kbd>P</kbd>
               </dt>

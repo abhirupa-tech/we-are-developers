@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 /**
  * Two targets:
@@ -10,7 +11,7 @@ import react from '@vitejs/plugin-react';
  *   `react-dom/profiling` exports createRoot.
  */
 export default defineConfig(({ mode }) => ({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: mode === 'bench' ? { alias: { 'react-dom/client': 'react-dom/profiling' } } : {},
   test: {
     environment: 'node',

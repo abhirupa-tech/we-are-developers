@@ -1,0 +1,19 @@
+/*
+ * Tailwind, used by the Live pane (src/live). Theme and utilities only: no
+ * preflight, so the app's own base styles in styles.css stay untouched.
+ */
+@import 'tailwindcss/theme.css';
+@import 'tailwindcss/utilities.css';
+
+/* Tailwind colour names for the app's existing CSS variables. */
+@theme inline {
+  --color-line: var(--line);
+  --color-muted: var(--muted);
+  --color-store: var(--s-store);
+  --font-mono: var(--mono);
+}
+
+/* The blinking caret belongs to the answer that is streaming, not to old ones. */
+.live-pane:is([data-status='streaming'], [data-status='stalled']) .live-messages > .msg-assistant:nth-last-child(2) .caret {
+  display: inline-block;
+}

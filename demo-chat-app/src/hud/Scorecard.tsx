@@ -14,7 +14,7 @@ export type RunResult = {
   compare: boolean;
   hidden: boolean;
   deviceMs: number | null;
-  /** How long the recording should take at this rate, for the pacing line. */
+  /** How long the recording should take at this rate, for the pacing line. 0 for a live stream. */
   expectedMs: number;
   panes: PaneResult[];
 };
@@ -53,14 +53,15 @@ export function Scorecard({ result, onClose }: { result: RunResult; onClose: () 
         <div>
           <h2>{result.outcome === 'done' ? 'Run complete' : result.outcome === 'stopped' ? 'Run stopped early' : 'Run failed'}</h2>
           <p className="sc-meta">
-            {label} · {result.recording} at {result.rate}x
+            {label} · {result.recording}
+            {result.expectedMs > 0 && ` at ${result.rate}x`}
           </p>
         </div>
         <button type="button" className="icon-btn" onClick={onClose} aria-label="Close scorecard">
           ×
         </button>
       </header>
-      {result.panes[0] && Number.isFinite(result.panes[0].metrics.durationMs) && (
+      {result.expectedMs > 0 && result.panes[0] && Number.isFinite(result.panes[0].metrics.durationMs) && (
         <p className="sc-pace">
           Replay took {n(result.panes[0].metrics.durationMs / 1000, 1)} s; the recording paces at {n(result.expectedMs / 1000, 1)} s at {result.rate}x.
           {result.panes[0].metrics.durationMs > result.expectedMs * 1.25 &&
