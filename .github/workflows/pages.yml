@@ -2,8 +2,7 @@ name: Deploy MockGPT to GitHub Pages
 
 on:
   push:
-    # The claude/ branch is a temporary trigger so the first deploy can run before the merge to main.
-    branches: [main, claude/compassionate-hypatia-hjepuu]
+    branches: [main]
     paths:
       - 'demo-chat-app/**'
       - '.github/workflows/pages.yml'
