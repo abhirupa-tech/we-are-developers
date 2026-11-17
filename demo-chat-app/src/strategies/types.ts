@@ -1,7 +1,7 @@
 import type { FC } from 'react';
 import type { EventBus } from '../stream/EventBus';
 
-export type StrategyId = 'setState' | 'transition' | 'syncStore';
+export type StrategyId = 'setState' | 'transition' | 'syncStore' | 'frameBatched';
 
 export interface Strategy {
   id: StrategyId;

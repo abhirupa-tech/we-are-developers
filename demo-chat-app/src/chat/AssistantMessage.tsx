@@ -1,14 +1,12 @@
-import { createContext, useContext, useEffect, useLayoutEffect } from 'react';
-import Markdown from 'react-markdown';
-import rehypeHighlight from 'rehype-highlight';
-import remarkGfm from 'remark-gfm';
+import { createContext, useContext, useEffect, useLayoutEffect, type ReactNode } from 'react';
+import { renderA2ui } from '../a2ui/renderA2ui';
+import { useRenderFlash } from '../debug/renderFlash';
+import { MarkdownText } from './MarkdownText';
 import type { RunCollector } from '../metrics/collector';
 
 /** The pane's collector. A stable object, so reading it never causes a render. */
 export const PaneContext = createContext<RunCollector | null>(null);
 
-const remarkPlugins = [remarkGfm];
-const rehypePlugins = [rehypeHighlight];
 
 /**
  * The one leaf every strategy renders: same Markdown pipeline, same CSS.
@@ -19,9 +17,14 @@ const rehypePlugins = [rehypeHighlight];
  * are counted one level up, in each strategy's own component (useRenderCount):
  * interrupted transition renders are abandoned before React reaches this leaf,
  * so counting here would miss exactly the work transitions throw away.
+ *
+ * Answers containing ```a2ui blocks render them as interactive surfaces, in
+ * every strategy, so heavy UI can be compared across strategies too.
+ * `render` overrides the body; the profiler hooks stay the same.
  */
-export function AssistantMessage({ text, seq }: { text: string; seq: number }) {
+export function AssistantMessage({ text, seq, render }: { text: string; seq: number; render?: (text: string) => ReactNode }) {
   const collector = useContext(PaneContext);
+  const ref = useRenderFlash<HTMLDivElement>('AssistantMessage');
 
   // Runs once per commit: `seq` is now on screen.
   useLayoutEffect(() => {
@@ -29,12 +32,10 @@ export function AssistantMessage({ text, seq }: { text: string; seq: number }) {
   });
 
   return (
-    <div className="msg msg-assistant">
+    <div ref={ref} className="msg msg-assistant">
       <div className="msg-who">Assistant</div>
       <div className="md">
-        <Markdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
-          {text}
-        </Markdown>
+        {render ? render(text) : text.includes('```a2ui') ? renderA2ui(text) : <MarkdownText text={text} />}
         <span className="caret" aria-hidden="true" />
       </div>
     </div>

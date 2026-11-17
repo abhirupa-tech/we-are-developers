@@ -1,4 +1,5 @@
 import { memo, Profiler, type FC } from 'react';
+import { useRenderFlash } from '../debug/renderFlash';
 import type { RunCollector } from '../metrics/collector';
 import type { EventBus } from '../stream/EventBus';
 import type { Strategy } from '../strategies/types';
@@ -33,6 +34,8 @@ export function Pane({
   status,
   error,
   onRetry,
+  onFallback,
+  emptyHint = 'recorded',
   compact,
 }: {
   strategy: Strategy;
@@ -43,11 +46,16 @@ export function Pane({
   status: PaneStatus;
   error?: string | null;
   onRetry?: () => void;
+  /** Offered when a Gemini run fails (quota, network): switch to the recordings. */
+  onFallback?: () => void;
+  emptyHint?: 'gemini' | 'recorded';
   compact?: boolean;
 }) {
   const Message = messageFor(strategy);
+  const ref = useRenderFlash<HTMLElement>('Pane');
   return (
     <section
+      ref={ref}
       className={`pane ${compact ? 'pane-compact' : ''}`}
       data-strategy={strategy.id}
       data-status={status}
@@ -65,8 +73,15 @@ export function Pane({
       <div className="transcript" role="log" aria-live="off" aria-busy={status === 'streaming'}>
         {!prompt && (
           <p className="empty">
-            Pick a recording and press <kbd>Start run</kbd>. The same stream replays through{' '}
-            <code>{strategy.label}</code>.
+            {emptyHint === 'gemini' ? (
+              <>
+                Ask Gemini a question below. Its answer streams through <code>{strategy.label}</code>.
+              </>
+            ) : (
+              <>
+                Pick a recording and press <kbd>Start run</kbd>. The same stream replays through <code>{strategy.label}</code>.
+              </>
+            )}
           </p>
         )}
         {prompt && (
@@ -90,6 +105,14 @@ export function Pane({
               <button type="button" className="link" onClick={onRetry}>
                 Retry run
               </button>
+            )}
+            {onFallback && (
+              <>
+                {' · '}
+                <button type="button" className="link" onClick={onFallback}>
+                  Use pre-recorded responses
+                </button>
+              </>
             )}
           </p>
         )}

@@ -1,9 +1,10 @@
+import { frameBatchedStrategy } from './frameBatched';
 import { setStateStrategy } from './setState';
 import { syncStoreStrategy } from './syncStore';
 import { transitionStrategy } from './transition';
 import type { Strategy, StrategyId } from './types';
 
-export const STRATEGIES: Strategy[] = [setStateStrategy, transitionStrategy, syncStoreStrategy];
+export const STRATEGIES: Strategy[] = [setStateStrategy, transitionStrategy, syncStoreStrategy, frameBatchedStrategy];
 
 export const strategyById = Object.fromEntries(STRATEGIES.map((s) => [s.id, s])) as Record<StrategyId, Strategy>;
 
@@ -12,6 +13,7 @@ export const STRATEGY_COLOR_VAR: Record<StrategyId, string> = {
   setState: '--s-setstate',
   transition: '--s-transition',
   syncStore: '--s-store',
+  frameBatched: '--s-frame',
 };
 
 export function strategyColor(id: StrategyId): string {

@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { decodeAction } from './a2ui/parse';
+import { A2UI_SYSTEM_PROMPT } from './a2ui/prompt';
 import { Pane, type PaneStatus } from './chat/Pane';
 import { Probe } from './chat/Probe';
-import { BUILD, FLAGS, PROFILER_ACTIVE, REACT_VERSION } from './config';
+import { AskBar } from './chat/AskBar';
+import { BUILD, FLAGS, GEMINI, PROFILER_ACTIVE, REACT_VERSION } from './config';
+import { renderFlash, useRenderFlash } from './debug/renderFlash';
 import { Hud } from './hud/Hud';
 import type { HudController } from './hud/controller';
 import { Scorecard, type RunResult } from './hud/Scorecard';
 import { chatStore } from './live/chatStore';
 import { GeminiSource } from './live/GeminiSource';
-import { LivePane } from './live/LivePane';
+import { LivePane, type LiveKind } from './live/LivePane';
+import { ModelPicker } from './live/ModelPicker';
 import { calibrateDevice } from './metrics/calibration';
 import { RunCollector } from './metrics/collector';
 import { gradeRun } from './metrics/grades';
@@ -23,8 +28,16 @@ import { runStream } from './stream/StreamClient';
 const RATES = [1, 2, 5, 10];
 const CATCH_UP_MS = 3000;
 
+/** Where a strategy run's answer comes from. */
+type Feed = 'gemini' | 'recorded';
+
 type RunView = {
   id: number;
+  /** 'chat' is the Live / A2UI modes; the others are the strategy panes' feeds. */
+  source: Feed | 'chat';
+  /** Scorecard title and expected duration, fixed when the run starts. */
+  title: string;
+  expectedMs: number;
   bus: EventBus;
   messageId: string | null;
   prompt: string;
@@ -32,6 +45,12 @@ type RunView = {
   status: PaneStatus;
   error: string | null;
 };
+
+/** Scorecard label for a live run: the question, or the A2UI action it sent. */
+function promptLabel(prompt: string) {
+  const action = decodeAction(prompt);
+  return action ? `A2UI action: ${action.action}` : prompt;
+}
 
 function isTyping(target: EventTarget | null) {
   const el = target as HTMLElement | null;
@@ -42,9 +61,12 @@ export function App() {
   const [strategy, setStrategy] = useState<StrategyId>('setState');
   const [compare, setCompare] = useState(FLAGS.compare);
   const [presenter, setPresenter] = useState(FLAGS.presenter);
-  /** Live mode: a real Gemini chat in one useSyncExternalStore pane. */
-  const [live, setLive] = useState(FLAGS.live && !FLAGS.compare);
-  const [prompt, setPrompt] = useState('');
+  /** Live modes: a real Gemini chat in one useSyncExternalStore pane, plain or with A2UI. */
+  const [live, setLive] = useState<LiveKind | false>(FLAGS.compare ? false : FLAGS.a2ui ? 'a2ui' : FLAGS.live ? 'chat' : false);
+  /** The strategy panes' feed: a real Gemini answer, or a recording (the fallback). */
+  const [feed, setFeed] = useState<Feed>(GEMINI.apiKey && !FLAGS.api ? 'gemini' : 'recorded');
+  const flashOn = useSyncExternalStore(renderFlash.subscribe, renderFlash.getSnapshot);
+  const appRef = useRenderFlash<HTMLDivElement>('App');
   const [ghostsOn, setGhostsOn] = useState(true);
   const [autoProbe, setAutoProbe] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -115,29 +137,37 @@ export function App() {
         const metrics = collector.snapshot(frames, now);
         return { strategy: s, metrics, grades: gradeRun(metrics) };
       });
+      const asked = view.source !== 'recorded';
       setResult({
         outcome,
-        recording: live ? view.prompt : (recording?.title ?? view.prompt),
-        rate: live ? 1 : rate,
+        recording: asked ? promptLabel(view.prompt) : view.title,
+        rate: asked ? 1 : rate,
         compare: view.panes.length > 1,
         hidden: frames?.hidden ?? false,
         deviceMs,
-        expectedMs: live ? 0 : (recording?.durationMs ?? 0) / rate,
+        expectedMs: asked ? 0 : view.expectedMs,
         panes,
       });
       setRun((r) => (r && r.id === view.id ? { ...r, status: outcome === 'done' ? 'done' : outcome, error } : r));
       setAnnounce(outcome === 'done' ? 'Answer complete. Scorecard ready.' : outcome === 'stopped' ? 'Run stopped.' : 'Run failed.');
     },
-    [recording, rate, deviceMs, live],
+    [rate, deviceMs],
   );
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
   }, []);
 
-  const start = useCallback(() => {
-    const question = prompt.trim();
-    if (live ? !question : !recording) return;
+  /**
+   * Starts a run. Strategy panes: asks Gemini `text`, or replays the selected
+   * recording. Chat modes: asks Gemini `text`, or replays `replayId` into the
+   * conversation (the Pre-recorded fallback).
+   */
+  const start = useCallback((text?: string, replayId?: string) => {
+    const question = text?.trim() ?? '';
+    const replay = live ? recordings.find((r) => r.id === replayId) : recording;
+    const asking = live ? !replay : feed === 'gemini';
+    if (asking ? !question : !replay) return;
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -146,16 +176,29 @@ export function App() {
     const frames = beginRun();
     const ids: StrategyId[] = live ? ['syncStore'] : compare ? STRATEGIES.map((s) => s.id) : [strategy];
     const panes = ids.map((s, i) => ({ strategy: s, collector: new RunCollector(`run${id}-pane${i}`, s, frames.startedAt) }));
-    const view: RunView = { id, bus, messageId: null, prompt: live ? question : recording!.prompt, panes, status: 'streaming', error: null };
+    const view: RunView = {
+      id,
+      source: asking ? (live ? 'chat' : 'gemini') : 'recorded',
+      title: asking ? question : replay!.title,
+      expectedMs: asking ? 0 : replay!.durationMs / rate,
+      bus,
+      messageId: null,
+      prompt: asking ? question : replay!.prompt,
+      panes,
+      status: 'streaming',
+      error: null,
+    };
 
     // Live mode: the question goes into the external store, the store listens
     // to the stream, and Gemini gets the conversation so far.
     let runSource = source;
     if (live) {
-      chatStore.addUserMessage(question);
-      runSource = new GeminiSource(chatStore.getSnapshot());
+      chatStore.addUserMessage(view.prompt);
+      if (asking) runSource = new GeminiSource(chatStore.getSnapshot(), live === 'a2ui' ? A2UI_SYSTEM_PROMPT : undefined);
       bus.on(RUN_CHANNEL, chatStore.onStreamEvent);
-      setPrompt('');
+    } else if (asking) {
+      // One question, one answer, streamed through the selected strategy.
+      runSource = new GeminiSource([{ id: 'q', role: 'user', text: question, seq: -1 }]);
     }
     let errorMessage: string | null = null;
 
@@ -172,7 +215,7 @@ export function App() {
     runStream(
       runSource,
       bus,
-      { recordingId: recording?.id ?? '', rate, seed: 1, signal: ac.signal },
+      { recordingId: replay?.id ?? '', rate, seed: 1, signal: ac.signal },
       {
         onError: (message) => (errorMessage = message),
         onEvent: (e) => {
@@ -197,7 +240,7 @@ export function App() {
       };
       waitForPaint();
     });
-  }, [recording, compare, strategy, source, rate, finalize, live, prompt]);
+  }, [recording, recordings, compare, strategy, source, rate, finalize, live, feed]);
 
   // Bind the pane readouts once the panes for this run are in the DOM.
   useEffect(() => {
@@ -232,11 +275,14 @@ export function App() {
     setCompare((c) => !c);
   }, [reset]);
 
-  const toggleLive = useCallback(() => {
-    reset();
-    setCompare(false);
-    setLive((l) => !l);
-  }, [reset]);
+  const toggleLive = useCallback(
+    (kind: LiveKind) => {
+      reset();
+      setCompare(false);
+      setLive((l) => (l === kind ? false : kind));
+    },
+    [reset],
+  );
 
   const running = run?.status === 'streaming' || run?.status === 'stalled';
 
@@ -244,14 +290,16 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
       const k = e.key.toLowerCase();
-      if (k === '1' || k === '2' || k === '3') switchTo(STRATEGIES[Number(k) - 1].id);
+      if (k === '1' || k === '2' || k === '3' || k === '4') switchTo(STRATEGIES[Number(k) - 1].id);
+      else if (k === '5') toggleLive('a2ui');
+      else if (k === 'f') renderFlash.toggle();
       else if (k === ' ') {
         e.preventDefault();
         if (running) stop();
         else start();
       } else if (k === 'r') reset();
       else if (k === 'c') toggleCompare();
-      else if (k === 'l') toggleLive();
+      else if (k === 'l') toggleLive('chat');
       else if (k === 'p') setPresenter((p) => !p);
       else if (k === 'g') {
         setGhostsOn((g) => !g);
@@ -271,10 +319,10 @@ export function App() {
 
   const paneStrategies = compare ? STRATEGIES : [strategyById[strategy]];
   /** The strategy highlighted in the selector. Live mode always uses the external store. */
-  const shownStrategy: StrategyId = live ? 'syncStore' : strategy;
+  const shownStrategy: StrategyId | null = live === 'a2ui' ? null : live ? 'syncStore' : strategy;
 
   return (
-    <div className={`app ${compare ? 'is-compare' : ''}`}>
+    <div ref={appRef} className={`app ${compare ? 'is-compare' : ''} ${FLAGS.hud ? '' : 'no-hud'}`}>
       <header className="topbar">
         <div className="brand">
           <span className="logo" aria-hidden="true">
@@ -288,7 +336,7 @@ export function App() {
           )}
         </div>
 
-        <div className="segmented" role="radiogroup" aria-label="React state strategy">
+        <div className="segmented" role="radiogroup" aria-label="Mode">
           {STRATEGIES.map((s, i) => (
             <button
               key={s.id}
@@ -304,14 +352,34 @@ export function App() {
               <code>{s.label}</code>
             </button>
           ))}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={live === 'a2ui'}
+            data-strategy="a2ui"
+            className={live === 'a2ui' ? 'on' : ''}
+            onClick={() => toggleLive('a2ui')}
+            title="Gemini answers with interactive A2UI surfaces, on useSyncExternalStore (key 5)"
+          >
+            <code>A2UI</code>
+          </button>
         </div>
 
         <div className="top-actions">
           <button type="button" className={`chip ${compare ? 'on' : ''}`} onClick={toggleCompare} aria-pressed={compare}>
             Compare
           </button>
-          <button type="button" className={`chip ${live ? 'on' : ''}`} onClick={toggleLive} aria-pressed={live} title="Chat with Gemini through useSyncExternalStore (key L)">
+          <button type="button" className={`chip ${live === 'chat' ? 'on' : ''}`} onClick={() => toggleLive('chat')} aria-pressed={live === 'chat'} title="Chat with Gemini through useSyncExternalStore (key L)">
             Live
+          </button>
+          <button
+            type="button"
+            className={`chip ${flashOn ? 'on' : ''}`}
+            onClick={renderFlash.toggle}
+            aria-pressed={flashOn}
+            title="Outline each component every time it re-renders (key F). Adds a little overhead to the numbers."
+          >
+            Flash renders
           </button>
           <button type="button" className={`chip ${presenter ? 'on' : ''}`} onClick={() => setPresenter((p) => !p)} aria-pressed={presenter}>
             Presenter
@@ -338,7 +406,7 @@ export function App() {
 
       {compare && (
         <p className="banner" role="note">
-          Compare mode: all three panes share one main thread, so these numbers are relative and illustrative. Use single runs (or Bench mode, coming next) for figures you publish.
+          Compare mode: all four panes share one main thread, so these numbers are relative and illustrative. Use single runs (or Bench mode, coming next) for figures you publish.
         </p>
       )}
 
@@ -346,6 +414,15 @@ export function App() {
         <div className="panes">
           {live && (
             <LivePane
+              kind={live}
+              onSend={start}
+              recordings={recordings}
+              rate={rate}
+              rates={RATES}
+              onRate={setRate}
+              onReplay={(id) => start(undefined, id)}
+              onStop={stop}
+              onNewChat={reset}
               collector={run?.panes[0]?.collector ?? null}
               messageId={run?.messageId ?? null}
               status={run?.status ?? 'idle'}
@@ -365,7 +442,9 @@ export function App() {
                 collector={pane?.collector ?? null}
                 status={run?.status ?? 'idle'}
                 error={run?.error}
-                onRetry={start}
+                onRetry={() => start(run?.source === 'gemini' ? run.prompt : undefined)}
+                onFallback={run?.source === 'gemini' ? () => setFeed('recorded') : undefined}
+                emptyHint={feed}
               />
             );
           })}
@@ -373,19 +452,24 @@ export function App() {
         {result && <Scorecard result={result} onClose={() => setResult(null)} />}
       </main>
 
-      <footer className="composer">
-        {live && (
-          <form
-            className="flex min-w-60 flex-[2]"
-            onSubmit={(e) => {
-              e.preventDefault();
-              start();
-            }}
-          >
-            <input className="text w-full" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Ask Gemini…" aria-label="Your message" />
-          </form>
+      {/* Hidden in the chat modes (they have their own composer), but kept
+          mounted so Auto-probe still measures responsiveness during a run. */}
+      <footer className="composer" hidden={!!live}>
+        <div className="feed-tabs" role="tablist" aria-label="Answer source">
+          <button type="button" role="tab" aria-selected={feed === 'gemini'} className={feed === 'gemini' ? 'on' : ''} disabled={running} onClick={() => setFeed('gemini')}>
+            Ask Gemini
+          </button>
+          <button type="button" role="tab" aria-selected={feed === 'recorded'} className={feed === 'recorded' ? 'on' : ''} disabled={running} onClick={() => setFeed('recorded')}>
+            Pre-recorded
+          </button>
+        </div>
+        {feed === 'gemini' && (
+          <>
+            <AskBar running={running} disabled={!GEMINI.apiKey} onAsk={start} />
+            <ModelPicker disabled={running} />
+          </>
         )}
-        <label className="field" hidden={live}>
+        <label className="field" hidden={feed !== 'recorded'}>
           <span className="sr-only">Recording</span>
           <select value={recordingId} onChange={(e) => setRecordingId(e.target.value)} disabled={running}>
             {recordings.map((r) => (
@@ -395,7 +479,7 @@ export function App() {
             ))}
           </select>
         </label>
-        <label className="field" hidden={live}>
+        <label className="field" hidden={feed !== 'recorded'}>
           <span className="sr-only">Replay speed</span>
           <select value={rate} onChange={(e) => setRate(Number(e.target.value))} disabled={running}>
             {RATES.map((r) => (
@@ -415,9 +499,11 @@ export function App() {
             Stop
           </button>
         ) : (
-          <button type="button" className="btn btn-go" onClick={start} disabled={live ? !prompt.trim() : !recording}>
-            {live ? 'Send' : 'Start run'}
-          </button>
+          feed === 'recorded' && (
+            <button type="button" className="btn btn-go" onClick={() => start()} disabled={!recording}>
+              Start run
+            </button>
+          )
         )}
       </footer>
 
@@ -476,9 +562,13 @@ export function App() {
             <h2>Keyboard shortcuts</h2>
             <dl>
               <dt>
-                <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>
+                <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd>
               </dt>
               <dd>Switch strategy</dd>
+              <dt>
+                <kbd>5</kbd>
+              </dt>
+              <dd>A2UI mode (Gemini with interactive UI)</dd>
               <dt>
                 <kbd>Space</kbd>
               </dt>
@@ -503,6 +593,10 @@ export function App() {
                 <kbd>G</kbd>
               </dt>
               <dd>Ghost runs on or off</dd>
+              <dt>
+                <kbd>F</kbd>
+              </dt>
+              <dd>Flash renders on or off</dd>
               <dt>
                 <kbd>?</kbd>
               </dt>

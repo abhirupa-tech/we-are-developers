@@ -22,6 +22,8 @@ export type RunFrames = {
   hidden: boolean;
   /** Frame time per frame, for the heat strip and its ghost. */
   frameTimes: number[];
+  /** Set by endRun(). */
+  endedAt?: number;
 };
 
 type FrameListener = (tick: FrameTick) => void;
@@ -142,6 +144,7 @@ export function beginRun(): RunFrames {
 
 export function endRun(): RunFrames | null {
   const done = run;
+  if (done) done.endedAt = performance.now();
   run = null;
   return done;
 }

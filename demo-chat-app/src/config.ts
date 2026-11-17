@@ -22,6 +22,8 @@ export const FLAGS = {
   compare: params.get('mode') === 'compare',
   /** ?mode=live starts in Live mode (a real Gemini chat). */
   live: params.get('mode') === 'live',
+  /** ?mode=a2ui starts in A2UI mode (Gemini answering with interactive UI). */
+  a2ui: params.get('mode') === 'a2ui',
   /** ?presenter=1 starts in Presenter mode. */
   presenter: params.get('presenter') === '1',
   /** ?api=https://… switches to the HTTP replay source. */
@@ -31,5 +33,5 @@ export const FLAGS = {
 /** Live mode. The key comes from .env.local (see .env.example), never from source. */
 export const GEMINI = {
   apiKey: (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) ?? '',
-  model: (import.meta.env.VITE_GEMINI_MODEL as string | undefined) ?? 'gemini-flash-latest',
+  model: (import.meta.env.VITE_GEMINI_MODEL as string | undefined) ?? 'gemini-3.5-flash',
 };

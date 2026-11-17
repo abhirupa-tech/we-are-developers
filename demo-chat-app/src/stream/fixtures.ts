@@ -1,3 +1,4 @@
+import { HEAVY_A2UI, HEAVY_MARKDOWN } from './heavyFixtures';
 import { mulberry32 } from './prng';
 import type { RecordingMeta } from './ReplaySource';
 
@@ -202,6 +203,28 @@ function record(meta: Omit<RecordingMeta, 'tokenCount' | 'durationMs'>, text: st
 }
 
 export const RECORDINGS: Recording[] = [
+  record(
+    {
+      id: 'heavy-markdown',
+      title: 'Heavy: field guide',
+      description: '~8,000 tokens: code, ASCII diagrams, flow charts, tables, task lists and links. The real stress test.',
+      prompt: 'Give me the complete field guide to streaming LLM answers into React, with code, diagrams and tables.',
+      contentTags: ['code', 'tables', 'diagrams', 'links', 'long'],
+    },
+    HEAVY_MARKDOWN,
+    16,
+  ),
+  record(
+    {
+      id: 'heavy-a2ui',
+      title: 'Heavy: A2UI labs',
+      description: '~8,400 tokens of A2UI: 9 interactive surfaces with cards, radios, selects, sliders, checkboxes, fields, ratings and buttons.',
+      prompt: 'Build me an interactive lab for each React streaming technique, as A2UI.',
+      contentTags: ['a2ui', 'interactive', 'long'],
+    },
+    HEAVY_A2UI,
+    16,
+  ),
   record(
     {
       id: 'code-heavy',

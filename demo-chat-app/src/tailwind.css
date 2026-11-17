@@ -1,19 +1,118 @@
 /*
- * Tailwind, used by the Live pane (src/live). Theme and utilities only: no
- * preflight, so the app's own base styles in styles.css stay untouched.
+ * Tailwind, used by the Live and A2UI panes (src/live, src/a2ui). Theme and
+ * utilities only: no preflight, so the app's own base styles in styles.css
+ * stay untouched.
  */
 @import 'tailwindcss/theme.css';
 @import 'tailwindcss/utilities.css';
 
 /* Tailwind colour names for the app's existing CSS variables. */
 @theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-text: var(--text);
   --color-line: var(--line);
   --color-muted: var(--muted);
   --color-store: var(--s-store);
+  --color-ok: var(--ok);
+  --color-alert: var(--alert);
+  --color-danger: #ff8a80;
   --font-mono: var(--mono);
 }
 
+/* ── Live chat ─────────────────────────────────────────────────────────── */
+
+/* The answer reads as chat, not as a transcript: no label, calmer type. */
+.live-pane .msg {
+  margin: 0;
+}
+.live-pane .msg-who {
+  display: none;
+}
+.live-pane .md {
+  font-size: 16px;
+  line-height: 1.7;
+}
+.live-pane .md > :last-child {
+  margin-bottom: 0;
+}
+.live-pane .md pre {
+  font-size: 13px;
+}
+
 /* The blinking caret belongs to the answer that is streaming, not to old ones. */
-.live-pane:is([data-status='streaming'], [data-status='stalled']) .live-messages > .msg-assistant:nth-last-child(2) .caret {
+.live-pane:is([data-status='streaming'], [data-status='stalled']) [data-live] .caret {
   display: inline-block;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: live-dot 1.1s ease-in-out infinite;
+}
+@keyframes live-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.a2ui-shimmer {
+  background: linear-gradient(90deg, var(--panel-2) 0%, var(--line) 50%, var(--panel-2) 100%);
+  background-size: 200% 100%;
+  animation: a2ui-shimmer 1.4s linear infinite;
+}
+@keyframes a2ui-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot,
+  .a2ui-shimmer {
+    animation: none;
+  }
+}
+
+/* The footer is the replay controls; the chat modes bring their own composer. */
+.composer[hidden] {
+  display: none;
+}
+
+/* ── Flash renders (src/debug/renderFlash.ts) ──────────────────────────── */
+
+/*
+ * Every flashable element carries data-flash once it has committed with the
+ * mode on. The outline and label are transparent at rest; the Web Animation
+ * fades them in and out on each commit.
+ */
+html.flash-renders [data-flash] {
+  position: relative;
+  outline: 2px solid rgb(255 196 75 / 0);
+  outline-offset: 1px;
+}
+html.flash-renders [data-flash]::after {
+  content: attr(data-flash);
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 20;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgb(255 196 75);
+  color: #1b1300;
+  font: 600 10px/1.5 var(--mono);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
 }

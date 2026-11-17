@@ -1,6 +1,6 @@
 import type { RunCollector } from '../metrics/collector';
 import { classifyFrame, type FrameClass } from '../metrics/frames';
-import { currentRun, fps, onFrame, onJank } from '../metrics/monitor';
+import { currentRun, fps, onFrame, onJank, type RunFrames } from '../metrics/monitor';
 import { percentile } from '../metrics/stats';
 import { strategyColor } from '../strategies';
 import type { StrategyId } from '../strategies/types';
@@ -47,6 +47,16 @@ function setText(el: HTMLElement | undefined, value: string) {
   if (el && el.textContent !== value) el.textContent = value;
 }
 
+type Level = 'ok' | 'warn' | 'bad' | '';
+
+/** Colours a tile (or list row) by how worrying its number is. */
+function setLevel(el: HTMLElement | undefined, level: Level) {
+  const host = el?.closest<HTMLElement>('.tile, .hud-list > div');
+  if (host && host.dataset.level !== level) host.dataset.level = level;
+}
+
+const level = (v: number, warn: number, bad: number): Level => (!Number.isFinite(v) ? '' : v >= bad ? 'bad' : v >= warn ? 'warn' : 'ok');
+
 function sizeCanvas(c: HTMLCanvasElement): CanvasRenderingContext2D {
   const dpr = window.devicePixelRatio || 1;
   const w = Math.max(1, Math.round(c.clientWidth * dpr));
@@ -67,6 +77,43 @@ export function createHud(els: HudElements, opts: { getPanes: () => RunCollector
   let lastFrameTimes: number[] = [];
   let lastBaseline = 1000 / 60;
   let paneReadouts: { collector: RunCollector; el: Record<string, HTMLElement> }[] = [];
+
+  // Per-run frame stats, scanned incrementally from the run's frame times.
+  let scanRun: RunFrames | null = null;
+  let scanned = 0;
+  let longFrames = 0;
+  let worstFrame = 0;
+
+  const writeFrames = (run: RunFrames, now: number) => {
+    if (run !== scanRun) {
+      scanRun = run;
+      scanned = longFrames = worstFrame = 0;
+    }
+    for (; scanned < run.frameTimes.length; scanned++) {
+      const t = run.frameTimes[scanned];
+      if (classifyFrame(t, run.baselineMs) === 'long') longFrames++;
+      if (t > worstFrame) worstFrame = t;
+    }
+    const end = Number.isNaN(run.endedAt ?? NaN) ? now : run.endedAt!;
+    const expected = Math.max(run.frames, Math.round((end - run.startedAt) / run.baselineMs));
+    const droppedPct = run.frames ? (run.dropped / run.frames) * 100 : 0;
+    const busyPct = (run.blockingMs / Math.max(1, end - run.startedAt)) * 100;
+    const t = els.text;
+    setText(t.frames, fmt(run.frames));
+    setText(t.expected, fmt(expected));
+    setText(t.hz, fmt(1000 / run.baselineMs));
+    setText(t.dropped, fmt(run.dropped));
+    setText(t.droppedPct, `${fmt(droppedPct, 1)}%`);
+    setLevel(t.dropped, level(droppedPct, 1, 5));
+    setText(t.longFrames, fmt(longFrames));
+    setLevel(t.longFrames, level(longFrames, 1, 4));
+    setText(t.worstFrame, fmt(worstFrame));
+    setLevel(t.worstFrame, run.frames ? level(worstFrame, run.baselineMs * 1.5, 50) : '');
+    setText(t.busy, `${fmt(busyPct)}%`);
+    setLevel(t.busy, level(busyPct, 10, 30));
+    setText(t.interaction, run.interactions ? `${fmt(run.worstInteraction)} ms` : '–');
+    setLevel(t.interaction, run.interactions ? level(run.worstInteraction, 100, 200) : '');
+  };
 
   // Heartbeat (JS half): moves only when a frame is produced.
   const beat = (now: number) => {
@@ -180,18 +227,28 @@ export function createHud(els: HudElements, opts: { getPanes: () => RunCollector
       els.lagFill.dataset.level = behind > 100 ? 'high' : behind > 20 ? 'mid' : 'low';
       setText(els.text.behind, fmt(behind));
       setText(els.text.received, fmt(main.received));
+      // Time to first token: how long the source (Gemini) kept us waiting.
+      const first = main.arrivedAt[0];
+      const waited = (first ?? (Number.isNaN(main.endedAt) ? now : main.endedAt)) - main.startedAt;
+      setText(els.text.ttft, `${fmt(waited / 1000, 1)} s`);
       setText(els.text.renders, fmt(main.renders));
       setText(els.text.commits, fmt(main.commits));
       setText(els.text.perToken, main.received ? fmt(main.renders / main.received, 2) : '–');
+      const d = main.renderDurations;
+      const total = d.reduce((a, b) => a + b, 0);
+      setText(els.text.renderAvg, d.length ? fmt(total / d.length, 1) : '–');
+      const p95 = percentile(d, 95);
+      setText(els.text.renderP95, d.length ? fmt(p95, 1) : '–');
+      setLevel(els.text.renderP95, d.length ? level(p95, 8, 16) : '');
+      const max = d.length ? Math.max(...d) : NaN;
+      setText(els.text.renderMax, d.length ? fmt(max, 1) : '–');
+      setLevel(els.text.renderMax, level(max, 16, 50));
+      setText(els.text.renderTotal, d.length ? fmt(total) : '–');
       const recent = main.latencies.slice(-200).map(([, l]) => l);
       setText(els.text.p95, fmt(percentile(recent, 95)));
       setText(els.text.pending, main.strategy === 'transition' ? `${fmt(main.transitionPendingMs / 1000, 1)} s` : '–');
     }
-    if (run) {
-      setText(els.text.dropped, fmt(run.dropped));
-      setText(els.text.busy, `${fmt((run.blockingMs / Math.max(1, now - run.startedAt)) * 100)}%`);
-      setText(els.text.interaction, run.interactions ? `${fmt(run.worstInteraction)} ms` : '–');
-    }
+    if (run) writeFrames(run, now);
     setText(els.text.fps, fmt(fps(now)));
     for (const r of paneReadouts) {
       setText(r.el.renders, fmt(r.collector.renders));
@@ -233,6 +290,8 @@ export function createHud(els: HudElements, opts: { getPanes: () => RunCollector
     },
     /** Call when a run ends: freezes its strip and keeps it as a ghost. */
     endRun(frameTimes: number[], baselineMs: number, main: RunCollector | undefined) {
+      // Final, exact frame numbers for the run that just ended.
+      if (scanRun) writeFrames(scanRun, performance.now());
       lastFrameTimes = frameTimes;
       lastBaseline = baselineMs;
       if (main && frameTimes.length) {

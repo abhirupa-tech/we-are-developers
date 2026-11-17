@@ -1,6 +1,6 @@
 # MockGPT
 
-A minimal chat app that replays a recorded LLM response stream through three
+A minimal chat app that replays a recorded LLM response stream through four
 React state strategies, with a live profiler on top. A conference demo first,
 a reproducible benchmark second.
 
@@ -17,8 +17,8 @@ Use the **bench build** for any number you publish. The dev build is labelled
 
 ## What's on screen
 
-- **Strategy selector**: `setState`, `useTransition`, `useSyncExternalStore`
-  (keys `1` `2` `3`). All three render the same `AssistantMessage` with the same
+- **Strategy selector**: `setState`, `useTransition`, `useSyncExternalStore`,
+  `syncStore + rAF` (keys `1` `2` `3` `4`). All four render the same `AssistantMessage` with the same
   Markdown pipeline (`react-markdown` + `remark-gfm` + `rehype-highlight`,
   re-parsed in full on every update, on purpose).
 - **HUD**, drawn imperatively so it never re-renders during a run:
@@ -36,14 +36,14 @@ Use the **bench build** for any number you publish. The dev build is labelled
 - **Scorecard** at the end of a run: smoothness, freshness and responsiveness
   graded S to D (thresholds in `src/metrics/grades.ts`), the key numbers, and
   "Copy results" as a Markdown table.
-- **Modes**: Single (default), Compare (`C`: three panes on one shared stream,
+- **Modes**: Single (default), Compare (`C`: four panes on one shared stream,
   with a caveat banner), Presenter (`P`: bigger HUD, notes panel).
 - **Live** (`L`): a real chat with Gemini in one `useSyncExternalStore` pane.
   See [Live mode](#live-mode-gemini--usesyncexternalstore).
 - **Interaction probe**: type in the probe field during a run, or leave
   Auto-probe on.
 
-Keyboard: `1` `2` `3` strategy · `Space` start/stop · `R` reset · `C` compare ·
+Keyboard: `1` `2` `3` `4` strategy · `5` A2UI · `F` flash renders · `Space` start/stop · `R` reset · `C` compare ·
 `L` live · `P` presenter · `G` ghost runs · `?` help.
 
 URL flags: `?hud=0` (HUD off, for the overhead check), `?strict=1` (StrictMode,
@@ -74,12 +74,50 @@ commits, tokens behind, time to paint, frames, interactions. One Gemini SSE
 chunk (a few words) counts as one token, and the network sets the pace, so runs
 are not repeatable: use the recordings for numbers you publish.
 
-`VITE_GEMINI_MODEL` picks the model (default `gemini-flash-latest`). Vite
+`VITE_GEMINI_MODEL` picks the model (default `gemini-3.5-flash`). Vite
 inlines `VITE_` variables into the bundle, so the key is visible to anyone who
 gets the build: keep Live mode to local demos, or put a proxy in front.
 
 Tailwind (v4, `@tailwindcss/vite`) is loaded without preflight in
 `src/tailwind.css`, so the rest of the app's CSS is unaffected.
+
+## syncStore + rAF (the fourth strategy)
+
+`src/strategies/frameBatched.tsx`: an external store that buffers appends and
+publishes at most once per animation frame. The other three render once per
+token or network chunk; this one renders at most once per frame, however fast
+tokens arrive, so it is the only strategy that reduces the amount of work
+rather than when it happens. Expect renders per token well under 1 on the
+heavy recordings at 5x or 10x. Time to paint goes up by at most one frame.
+
+## A2UI mode (Gemini + interactive UI)
+
+`A2UI` in the mode selector (key `5`, or `?mode=a2ui`) is Live mode with a
+system prompt that lets Gemini answer with interactive UI, in the spirit of
+Google's A2UI: the agent sends a declarative JSON description built only from
+a trusted component catalog, and the client renders it with its own
+components.
+
+| File | What it does |
+| --- | --- |
+| `src/a2ui/types.ts` | The catalog: Column, Row, Card, Text, Badge, Divider, Image, Button, CheckBox, RadioGroup, Select, TextField, Slider, Rating, Progress. |
+| `src/a2ui/prompt.ts` | The contract Gemini gets: format, catalog, bindings, actions. |
+| `src/a2ui/parse.ts` | Splits a streaming answer into Markdown and ```` ```a2ui ```` blocks, validates surfaces (unknown components and non-https images are rejected), data-model paths. |
+| `src/a2ui/Surface.tsx` | The React renderer. Inputs bind to the surface's `dataModel` by `path`. |
+
+A Button sends `[a2ui action] {surfaceId, action, data}` back to Gemini as the
+next user turn, with the surface's current data model, and the surface locks.
+Simplified from the A2UI spec: one JSON object per surface with a nested tree,
+instead of a flat component list streamed in parts.
+
+## Flash renders
+
+`Flash renders` in the top bar (key `F`, or `?flash=1`) outlines a component
+every time it commits, with its name and commit count. It covers the chat
+components (Conversation, each message, the composer, every A2UI component)
+and the replay panes. Flags and animations live outside React, so toggling it
+re-renders nothing, but each flash costs a little main-thread time: turn it off
+before reading the scorecard.
 
 ## Stream sources
 
