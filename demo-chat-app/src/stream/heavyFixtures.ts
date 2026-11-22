@@ -347,3 +347,33 @@ Each section below is an **A2UI surface**: the agent describes the UI as JSON, a
   // A2UI chapters are ~900 tokens each; leave room for one more surface.
   HEAVY_TARGET_TOKENS + 600,
 );
+
+/** The stage demo: about 3,000 tokens of prose, code fences, tables and links. */
+export const DEMO_TARGET_TOKENS = 3000;
+
+export const DEMO_3K = build(
+  (topics) => `# Streaming an LLM answer into React without dropping frames
+
+About **three thousand tokens** of prose, highlighted code, diagrams, tables and links, streamed fast. Every update re-parses all of it, so the strategy that renders least often, *at the right moment*, wins. Background: [React docs](https://react.dev), [web.dev on rendering performance](https://web.dev/articles/rendering-performance), [MDN requestAnimationFrame](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame).
+
+**Contents:** ${topics.map((t, i) => `[${i + 1}. ${t.title}](#${i + 1}-${t.slug})`).join(' · ')}
+
+`,
+  markdownChapter,
+  `## Summary
+
+| Strategy | Renders | Aligned to frames | Dropped frames |
+| --- | --- | --- | --- |
+| \`setState\` | one per network task | no | most |
+| \`setState\` + 50 ms buffer | about 20 per second | no | fewer |
+| \`useSyncExternalStore\` + rAF | at most one per frame | yes | fewest |
+
+\`\`\`ts
+// The winner, in one line: buffer outside React, publish once per frame.
+append(delta) { pending += delta; if (!scheduled) { scheduled = true; requestAnimationFrame(flush); } }
+\`\`\`
+
+Measure it yourself with the [Profiler](https://react.dev/reference/react/Profiler) and the [Chrome performance panel](https://developer.chrome.com/docs/devtools/performance).
+`,
+  DEMO_TARGET_TOKENS,
+);

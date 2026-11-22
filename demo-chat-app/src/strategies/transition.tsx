@@ -1,6 +1,6 @@
 import { useEffect, useState, useTransition } from 'react';
 import { AssistantMessage, useRenderCount, useReportPending } from '../chat/AssistantMessage';
-import type { EventBus } from '../stream/EventBus';
+import type { MessageBus } from './types';
 import type { Strategy } from './types';
 
 /**
@@ -8,7 +8,7 @@ import type { Strategy } from './types';
  * responsive, but it doesn't reduce the work: renders can be started,
  * interrupted and restarted, so render attempts can exceed commits.
  */
-function Message({ bus, messageId }: { bus: EventBus; messageId: string }) {
+function Message({ bus, messageId }: { bus: MessageBus; messageId: string }) {
   useRenderCount();
   const [msg, setMsg] = useState({ text: '', seq: -1 });
   const [isPending, startTransition] = useTransition();

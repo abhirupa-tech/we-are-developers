@@ -82,16 +82,19 @@ export function createHud(els: HudElements, opts: { getPanes: () => RunCollector
   let scanRun: RunFrames | null = null;
   let scanned = 0;
   let longFrames = 0;
+  let slowFrames = 0;
   let worstFrame = 0;
 
   const writeFrames = (run: RunFrames, now: number) => {
     if (run !== scanRun) {
       scanRun = run;
-      scanned = longFrames = worstFrame = 0;
+      scanned = longFrames = slowFrames = worstFrame = 0;
     }
     for (; scanned < run.frameTimes.length; scanned++) {
       const t = run.frameTimes[scanned];
-      if (classifyFrame(t, run.baselineMs) === 'long') longFrames++;
+      const cls = classifyFrame(t, run.baselineMs);
+      if (cls === 'long') longFrames++;
+      else if (cls === 'slow') slowFrames++;
       if (t > worstFrame) worstFrame = t;
     }
     const end = Number.isNaN(run.endedAt ?? NaN) ? now : run.endedAt!;
@@ -105,6 +108,10 @@ export function createHud(els: HudElements, opts: { getPanes: () => RunCollector
     setText(t.dropped, fmt(run.dropped));
     setText(t.droppedPct, `${fmt(droppedPct, 1)}%`);
     setLevel(t.dropped, level(droppedPct, 1, 5));
+    const slowPct = run.frames ? (slowFrames / run.frames) * 100 : 0;
+    setText(t.slowFrames, fmt(slowFrames));
+    setText(t.slowPct, `${fmt(slowPct, 1)}%`);
+    setLevel(t.slowFrames, level(slowPct, 5, 15));
     setText(t.longFrames, fmt(longFrames));
     setLevel(t.longFrames, level(longFrames, 1, 4));
     setText(t.worstFrame, fmt(worstFrame));

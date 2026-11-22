@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 
 /**
- * "Flash renders": outline a component every time it commits, with a small
+ * "Flash renders": light up a component every time it commits, with a small
  * label naming it and counting its commits. Like React DevTools' "highlight
  * updates", but always available and scoped to the components we care about.
  *
@@ -40,20 +40,22 @@ export const renderFlash = {
   },
 };
 
-const OUTLINE: Keyframe[] = [
-  { outlineColor: 'rgb(255 196 75 / 0.95)', boxShadow: '0 0 0 3px rgb(255 196 75 / 0.25), 0 0 22px rgb(255 196 75 / 0.25)' },
-  { outlineColor: 'rgb(255 196 75 / 0)', boxShadow: '0 0 0 3px rgb(255 196 75 / 0), 0 0 22px rgb(255 196 75 / 0)' },
+// The whole component lights up (an inset shadow fills the box, under its
+// content), with a thin ring on the edge. Far easier to see than an outline.
+const TINT: Keyframe[] = [
+  { boxShadow: 'inset 0 0 0 100vmax rgb(255 196 75 / 0.22), 0 0 0 2px rgb(255 196 75 / 0.9)' },
+  { boxShadow: 'inset 0 0 0 100vmax rgb(255 196 75 / 0), 0 0 0 2px rgb(255 196 75 / 0)' },
 ];
 const LABEL: Keyframe[] = [{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }];
 const TIMING: KeyframeAnimationOptions = { duration: 700, easing: 'ease-out' };
 
 function flash(el: HTMLElement, label: string) {
   el.dataset.flash = label;
-  el.animate(OUTLINE, TIMING);
+  el.animate(TINT, TIMING);
   try {
     el.animate(LABEL, { ...TIMING, pseudoElement: '::after' });
   } catch {
-    // Older engines without pseudo-element animations: outline only.
+    // Older engines without pseudo-element animations: tint only.
   }
 }
 

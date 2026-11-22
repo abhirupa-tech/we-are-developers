@@ -11,6 +11,8 @@ const TEXT_KEYS = [
   'expected',
   'dropped',
   'droppedPct',
+  'slowFrames',
+  'slowPct',
   'longFrames',
   'worstFrame',
   'jank',
@@ -37,9 +39,9 @@ const TEXT_KEYS = [
 type Key = (typeof TEXT_KEYS)[number];
 
 /** One big number. The controller writes the value and sets data-level. */
-function Tile({ k, label, unit, sub, hint }: { k: Key; label: string; unit?: string; sub?: ReactNode; hint: string }) {
+function Tile({ k, label, unit, sub, hint, wide }: { k: Key; label: string; unit?: string; sub?: ReactNode; hint: string; wide?: boolean }) {
   return (
-    <div className="tile" title={hint}>
+    <div className={`tile ${wide ? 'tile-wide' : ''}`} title={hint}>
       <span className="tile-label">{label}</span>
       <span className="tile-value">
         <span data-t={k}>–</span>
@@ -108,7 +110,7 @@ export function Hud({
   return (
     <aside className="hud" ref={rootRef} aria-label="Profiler">
       {/* ── Frames ─────────────────────────────────────────────── */}
-      <section className="hud-section">
+      <section className="hud-section hud-frames">
         <header className="hud-head">
           <h2>Frames</h2>
           <span className="hud-fps">
@@ -143,6 +145,7 @@ export function Hud({
 
         <div className="tiles">
           <Tile
+            wide
             k="frames"
             label="Browser frames"
             sub={
@@ -162,8 +165,18 @@ export function Hud({
             }
             hint="Frames that took over 1.5× the display's refresh interval."
           />
-          <Tile k="longFrames" label="Long frames" unit="> 50 ms" hint="Frames over 50 ms: the page visibly stuttered." />
+          <Tile
+            k="slowFrames"
+            label="Slow frames"
+            sub={
+              <>
+                <span data-t="slowPct">–</span> of all frames
+              </>
+            }
+            hint="Frames between 1.2× and 1.5× the refresh interval: late, but not dropped."
+          />
           <Tile k="worstFrame" label="Worst frame" unit="ms" hint="The single longest frame of the run." />
+          <Tile k="longFrames" label="Long frames" unit="> 50 ms" hint="Frames over 50 ms: the page visibly stuttered." />
         </div>
 
         <div className="hud-heartbeat" title="Heartbeat twins: the top dot moves with JavaScript frames and freezes when the main thread is blocked; the bottom one runs on the compositor and keeps gliding.">

@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { AssistantMessage, useRenderCount } from '../chat/AssistantMessage';
-import type { EventBus } from '../stream/EventBus';
+import type { MessageBus } from './types';
 import { createMessageStore, type MessageStore } from './messageStore';
 import type { Strategy } from './types';
 
@@ -9,9 +9,9 @@ import type { Strategy } from './types';
  * getSnapshot returns a stable object between changes, so React won't loop.
  * External store updates are always synchronous: they can't be transitions.
  */
-const stores = new WeakMap<EventBus, Map<string, MessageStore>>();
+const stores = new WeakMap<MessageBus, Map<string, MessageStore>>();
 
-function storeFor(bus: EventBus, messageId: string): MessageStore {
+function storeFor(bus: MessageBus, messageId: string): MessageStore {
   const byId = stores.get(bus) ?? new Map<string, MessageStore>();
   stores.set(bus, byId);
   let store = byId.get(messageId);
@@ -23,7 +23,7 @@ function storeFor(bus: EventBus, messageId: string): MessageStore {
   return store;
 }
 
-function Message({ bus, messageId }: { bus: EventBus; messageId: string }) {
+function Message({ bus, messageId }: { bus: MessageBus; messageId: string }) {
   useRenderCount();
   const store = storeFor(bus, messageId);
   useEffect(

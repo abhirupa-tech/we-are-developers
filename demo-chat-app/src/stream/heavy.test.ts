@@ -23,3 +23,14 @@ describe('heavy recordings', () => {
     }
   });
 });
+
+describe('stage demo recording', () => {
+  it('is about 3,000 tokens with code fences and links', () => {
+    const rec = RECORDINGS.find((r) => r.id === 'demo-3k')!;
+    const text = rec.deltas.map((d) => d.delta).join('');
+    expect(rec.tokenCount).toBeGreaterThanOrEqual(2500);
+    expect(rec.tokenCount).toBeLessThanOrEqual(3200);
+    expect(text).toContain('```');
+    expect(text).toMatch(/\]\(https:\/\//);
+  });
+});
