@@ -93,13 +93,11 @@
 
 /*
  * Every flashable element carries data-flash once it has committed with the
- * mode on. The outline and label are transparent at rest; the Web Animation
+ * mode on. The tint and label are transparent at rest; the Web Animation
  * fades them in and out on each commit.
  */
 html.flash-renders [data-flash] {
   position: relative;
-  outline: 2px solid rgb(255 196 75 / 0);
-  outline-offset: 1px;
 }
 html.flash-renders [data-flash]::after {
   content: attr(data-flash);

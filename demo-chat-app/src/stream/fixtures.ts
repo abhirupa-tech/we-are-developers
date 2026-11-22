@@ -1,4 +1,4 @@
-import { HEAVY_A2UI, HEAVY_MARKDOWN } from './heavyFixtures';
+import { DEMO_3K, HEAVY_A2UI, HEAVY_MARKDOWN } from './heavyFixtures';
 import { mulberry32 } from './prng';
 import type { RecordingMeta } from './ReplaySource';
 
@@ -203,6 +203,17 @@ function record(meta: Omit<RecordingMeta, 'tokenCount' | 'durationMs'>, text: st
 }
 
 export const RECORDINGS: Recording[] = [
+  record(
+    {
+      id: 'demo-3k',
+      title: 'Demo: 3K tokens',
+      description: '~3,000 tokens: code fences, snippets, tables, diagrams and links. The stage demo.',
+      prompt: 'How do I stream an LLM answer into React without dropping frames? Show code, tables and links.',
+      contentTags: ['code', 'tables', 'links'],
+    },
+    DEMO_3K,
+    12,
+  ),
   record(
     {
       id: 'heavy-markdown',

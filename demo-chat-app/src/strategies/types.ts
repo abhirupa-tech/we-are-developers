@@ -1,7 +1,10 @@
 import type { FC } from 'react';
 import type { EventBus } from '../stream/EventBus';
 
-export type StrategyId = 'setState' | 'transition' | 'syncStore' | 'frameBatched';
+export type StrategyId = 'setState' | 'buffered' | 'transition' | 'syncStore' | 'frameBatched';
+
+/** What a strategy needs from the bus: subscribe to one message's events. */
+export type MessageBus = Pick<EventBus, 'on'>;
 
 export interface Strategy {
   id: StrategyId;
@@ -10,5 +13,5 @@ export interface Strategy {
   /** One-line talking point. */
   note: string;
   /** Mounts the strategy-specific plumbing and renders the shared message. */
-  Message: FC<{ bus: EventBus; messageId: string }>;
+  Message: FC<{ bus: MessageBus; messageId: string }>;
 }

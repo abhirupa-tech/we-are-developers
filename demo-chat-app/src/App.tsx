@@ -75,7 +75,7 @@ export function App() {
   const [apiUrl, setApiUrl] = useState(FLAGS.api);
   const [serverPaces, setServerPaces] = useState(true);
   const [recordings, setRecordings] = useState<RecordingMeta[]>([]);
-  const [recordingId, setRecordingId] = useState('code-heavy');
+  const [recordingId, setRecordingId] = useState('demo-3k');
   const [rate, setRate] = useState(5);
   const [run, setRun] = useState<RunView | null>(null);
   const [result, setResult] = useState<RunResult | null>(null);
@@ -290,8 +290,8 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
       const k = e.key.toLowerCase();
-      if (k === '1' || k === '2' || k === '3' || k === '4') switchTo(STRATEGIES[Number(k) - 1].id);
-      else if (k === '5') toggleLive('a2ui');
+      if (k === '1' || k === '2' || k === '3') switchTo(STRATEGIES[Number(k) - 1].id);
+      else if (k === '4') toggleLive('a2ui');
       else if (k === 'f') renderFlash.toggle();
       else if (k === ' ') {
         e.preventDefault();
@@ -299,7 +299,6 @@ export function App() {
         else start();
       } else if (k === 'r') reset();
       else if (k === 'c') toggleCompare();
-      else if (k === 'l') toggleLive('chat');
       else if (k === 'p') setPresenter((p) => !p);
       else if (k === 'g') {
         setGhostsOn((g) => !g);
@@ -359,7 +358,7 @@ export function App() {
             data-strategy="a2ui"
             className={live === 'a2ui' ? 'on' : ''}
             onClick={() => toggleLive('a2ui')}
-            title="Gemini answers with interactive A2UI surfaces, on useSyncExternalStore (key 5)"
+            title="Gemini answers with interactive A2UI surfaces, on useSyncExternalStore (key 4)"
           >
             <code>A2UI</code>
           </button>
@@ -369,15 +368,12 @@ export function App() {
           <button type="button" className={`chip ${compare ? 'on' : ''}`} onClick={toggleCompare} aria-pressed={compare}>
             Compare
           </button>
-          <button type="button" className={`chip ${live === 'chat' ? 'on' : ''}`} onClick={() => toggleLive('chat')} aria-pressed={live === 'chat'} title="Chat with Gemini through useSyncExternalStore (key L)">
-            Live
-          </button>
           <button
             type="button"
             className={`chip ${flashOn ? 'on' : ''}`}
             onClick={renderFlash.toggle}
             aria-pressed={flashOn}
-            title="Outline each component every time it re-renders (key F). Adds a little overhead to the numbers."
+            title="Light up each component every time it re-renders (key F). Adds a little overhead to the numbers."
           >
             Flash renders
           </button>
@@ -406,7 +402,7 @@ export function App() {
 
       {compare && (
         <p className="banner" role="note">
-          Compare mode: all four panes share one main thread, so these numbers are relative and illustrative. Use single runs (or Bench mode, coming next) for figures you publish.
+          Compare mode: all three panes share one main thread, so these numbers are relative and illustrative. Use single runs (or Bench mode, coming next) for figures you publish.
         </p>
       )}
 
@@ -562,11 +558,11 @@ export function App() {
             <h2>Keyboard shortcuts</h2>
             <dl>
               <dt>
-                <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd>
+                <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>
               </dt>
               <dd>Switch strategy</dd>
               <dt>
-                <kbd>5</kbd>
+                <kbd>4</kbd>
               </dt>
               <dd>A2UI mode (Gemini with interactive UI)</dd>
               <dt>
@@ -581,10 +577,6 @@ export function App() {
                 <kbd>C</kbd>
               </dt>
               <dd>Compare mode</dd>
-              <dt>
-                <kbd>L</kbd>
-              </dt>
-              <dd>Live mode (Gemini chat)</dd>
               <dt>
                 <kbd>P</kbd>
               </dt>

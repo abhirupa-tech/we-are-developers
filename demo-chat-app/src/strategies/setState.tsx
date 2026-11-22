@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AssistantMessage, useRenderCount } from '../chat/AssistantMessage';
-import type { EventBus } from '../stream/EventBus';
+import type { MessageBus } from './types';
 import type { Strategy } from './types';
 
 /**
@@ -8,7 +8,7 @@ import type { Strategy } from './types';
  * Automatic batching only merges updates inside one task. Separate network
  * chunks are separate tasks, so each becomes its own render.
  */
-function Message({ bus, messageId }: { bus: EventBus; messageId: string }) {
+function Message({ bus, messageId }: { bus: MessageBus; messageId: string }) {
   useRenderCount();
   const [msg, setMsg] = useState({ text: '', seq: -1 });
 
