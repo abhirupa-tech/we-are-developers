@@ -18,6 +18,7 @@ import type { A2Action } from '../a2ui/types';
 import { AssistantMessage, PaneContext, useRenderCount } from '../chat/AssistantMessage';
 import type { PaneStatus } from '../chat/Pane';
 import { GEMINI } from '../config';
+import { slowCommit } from '../debug/cpuThrottle';
 import { useRenderFlash } from '../debug/renderFlash';
 import type { RunCollector } from '../metrics/collector';
 import type { RecordingMeta } from '../stream/ReplaySource';
@@ -434,7 +435,7 @@ export function LivePane({
 
           <A2uiContext.Provider value={a2ui}>
             <PaneContext.Provider value={collector}>
-              <Profiler id="live-pane" onRender={(_id, _phase, actualDuration) => collector?.onCommit(actualDuration)}>
+              <Profiler id="live-pane" onRender={(_id, _phase, actualDuration) => collector?.onCommit(slowCommit(actualDuration))}>
                 <Conversation liveMessageId={messageId} kind={kind} stick={stick} />
               </Profiler>
             </PaneContext.Provider>
