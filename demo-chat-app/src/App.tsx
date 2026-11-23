@@ -350,7 +350,7 @@ export function App() {
             ◐
           </span>
           MockGPT
-          <span className="brand-animal" role="img" aria-label={`This session's animal: ${animal}`} title={`This session's animal: ${animal}. It makes a sound on every dropped frame when Audio is on.`}>
+          <span className="brand-animal" role="img" aria-label={`This page's animal: ${animal}`} title={`This page's animal: ${animal}, picked at random on every load. It makes a sound on every dropped frame when Audio is on.`}>
             {ANIMAL_EMOJI[animal]}
           </span>
           {!presenter && (
@@ -407,7 +407,7 @@ export function App() {
             className={`chip ${audioOn ? 'on' : ''}`}
             onClick={dropSound.toggle}
             aria-pressed={audioOn}
-            title={`A ${animal} sound on every dropped frame during a run (key A). The animal is picked at random for each browser session.`}
+            title={`A ${animal} sound on every dropped frame during a run (key A). The animal is picked at random on every page load.`}
           >
             {audioOn ? '🔊' : '🔇'} Audio
           </button>
