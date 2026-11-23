@@ -350,6 +350,9 @@ export function App() {
             ◐
           </span>
           MockGPT
+          <span className="brand-animal" role="img" aria-label={`This session's animal: ${animal}`} title={`This session's animal: ${animal}. It makes a sound on every dropped frame when Audio is on.`}>
+            {ANIMAL_EMOJI[animal]}
+          </span>
           {!presenter && (
             <span className={`badge badge-${BUILD}`} title={`React ${REACT_VERSION}`}>
               {BUILD} build · React {REACT_VERSION}
@@ -406,7 +409,7 @@ export function App() {
             aria-pressed={audioOn}
             title={`A ${animal} sound on every dropped frame during a run (key A). The animal is picked at random for each browser session.`}
           >
-            {audioOn ? '🔊' : '🔇'} Audio {ANIMAL_EMOJI[animal]}
+            {audioOn ? '🔊' : '🔇'} Audio
           </button>
           <label className="chip cpu-select" title="Simulated CPU throttle: each commit also blocks the main thread for (N - 1) times its render time">
             CPU

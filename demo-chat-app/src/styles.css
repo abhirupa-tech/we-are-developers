@@ -105,6 +105,7 @@ button {
 /* ── Top bar ─────────────────────────────────────────────────────────── */
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   padding: 10px 20px;
@@ -122,6 +123,17 @@ button {
 
 .logo {
   color: var(--s-store);
+}
+
+.brand-animal {
+  font-size: 1.15em;
+  line-height: 1;
+}
+
+.brand,
+.badge {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .badge {
@@ -146,6 +158,9 @@ button {
 
 .segmented {
   display: flex;
+  min-width: max-content;
+  overflow-x: auto;
+  scrollbar-width: none;
   margin: 0 auto;
   padding: 3px;
   border: 1px solid var(--line);
@@ -154,6 +169,8 @@ button {
 }
 
 .segmented button {
+  flex-shrink: 0;
+  white-space: nowrap;
   border: 0;
   background: transparent;
   padding: 6px 14px;
@@ -205,6 +222,12 @@ button {
 .top-actions {
   display: flex;
   gap: 8px;
+  margin-left: auto;
+}
+
+.top-actions > * {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .chip,
@@ -1364,6 +1387,7 @@ html.presenter .badge {
   .segmented {
     order: 3;
     width: 100%;
+    min-width: 0;
     overflow-x: auto;
   }
   .app {

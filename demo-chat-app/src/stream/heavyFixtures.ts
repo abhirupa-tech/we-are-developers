@@ -377,3 +377,66 @@ Measure it yourself with the [Profiler](https://react.dev/reference/react/Profil
 `,
   DEMO_TARGET_TOKENS,
 );
+
+/** The mid-size field guide: about 4,500 tokens, same chapters as the big one. */
+export const FIELD_GUIDE_TARGET_TOKENS = 4500;
+
+export const HEAVY_FIELD_GUIDE_4500 = build(
+  (topics) => `# Streaming an LLM answer into React: the field guide
+
+About **four and a half thousand tokens** of headings, highlighted code, ASCII architecture diagrams, flow charts, GFM tables, task lists, quotes and links. Every update re-parses all of it, so the strategy that renders least often, at the right moment, drops the fewest frames.
+
+**Contents:** ${topics.map((t, i) => `[${i + 1}. ${t.title}](#${i + 1}-${t.slug})`).join(' · ')}
+
+`,
+  markdownChapter,
+  `## Summary
+
+| Strategy | Renders | Aligned to frames | Dropped frames |
+| --- | --- | --- | --- |
+| \`setState\` | one per network task | no | most |
+| \`setState\` + 50 ms buffer | about 20 per second | no | fewer |
+| \`useSyncExternalStore\` + rAF | at most one per frame | yes | fewest |
+
+## FAQ
+
+**Why not just \`useDeferredValue\`?** It drops stale renders only when React is already behind. Frame batching makes sure it never falls behind in the first place. See [useDeferredValue](https://react.dev/reference/react/useDeferredValue).
+
+**Doesn't React 18 batch automatically?** Only updates inside one task. Every network chunk is a new task, so every chunk is a new render. The [automatic batching notes](https://react.dev/blog/2022/03/29/react-v18#new-feature-automatic-batching) spell it out.
+
+**What about a 50 ms timer?** Fewer renders, but the timer fires mid-frame, so a render that would have fit can still miss the paint.
+
+\`\`\`ts
+// Timer buffer: fewer renders, not aligned to frames.
+const timer = setInterval(() => {
+  if (!pending) return;
+  setText((t) => t + pending);
+  pending = '';
+}, 50);
+
+// Frame batching: one publish per frame, at the start of the frame.
+function append(delta: string) {
+  pending += delta;
+  if (scheduled) return;
+  scheduled = true;
+  requestAnimationFrame(() => {
+    scheduled = false;
+    text += pending;
+    pending = '';
+    listeners.forEach((l) => l());
+  });
+}
+\`\`\`
+
+**How do I know it worked?** Count dropped frames, not renders. A run with fewer renders can still drop more frames if each render lands at the wrong moment.
+
+- [ ] Run each strategy on the same recording
+- [ ] Turn on **Flash renders**: orange means the frame dropped
+- [ ] Compare *Frames dropped* and *Slow frames* in the HUD
+
+Further reading: [web.dev on INP](https://web.dev/articles/inp), [MDN requestAnimationFrame](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame), [useSyncExternalStore](https://react.dev/reference/react/useSyncExternalStore).
+
+Measure on your own hardware, with the [Profiler](https://react.dev/reference/react/Profiler) and the [DevTools performance panel](https://developer.chrome.com/docs/devtools/performance), before you believe any of it.
+`,
+  FIELD_GUIDE_TARGET_TOKENS + 100,
+);
