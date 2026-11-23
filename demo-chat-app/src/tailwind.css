@@ -99,6 +99,10 @@
 html.flash-renders [data-flash] {
   position: relative;
 }
+html.flash-renders [data-flash][data-flash-dropped]::after {
+  background: rgb(255 140 26);
+  color: #1b0b00;
+}
 html.flash-renders [data-flash]::after {
   content: attr(data-flash);
   position: absolute;
@@ -107,8 +111,8 @@ html.flash-renders [data-flash]::after {
   z-index: 20;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgb(255 196 75);
-  color: #1b1300;
+  background: rgb(43 228 255);
+  color: #00161b;
   font: 600 10px/1.5 var(--mono);
   white-space: nowrap;
   pointer-events: none;

@@ -24,6 +24,14 @@ export const FLAGS = {
   live: params.get('mode') === 'live',
   /** ?mode=a2ui starts in A2UI mode (Gemini answering with interactive UI). */
   a2ui: params.get('mode') === 'a2ui',
+  /** ?strategy=setState|buffered|frameBatched picks the strategy. */
+  strategy: params.get('strategy') ?? '',
+  /** ?recording=demo-3k picks the pre-recorded answer. */
+  recording: params.get('recording') ?? '',
+  /** ?rate=5 sets the replay speed. */
+  rate: Number(params.get('rate')) || 0,
+  /** ?cpu=4 sets the simulated CPU throttle. */
+  cpu: Number(params.get('cpu')) || 1,
   /** ?presenter=1 starts in Presenter mode. */
   presenter: params.get('presenter') === '1',
   /** ?api=https://… switches to the HTTP replay source. */

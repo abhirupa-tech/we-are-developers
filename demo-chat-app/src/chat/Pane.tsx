@@ -1,4 +1,5 @@
 import { memo, Profiler, type FC } from 'react';
+import { slowCommit } from '../debug/cpuThrottle';
 import { useRenderFlash } from '../debug/renderFlash';
 import type { RunCollector } from '../metrics/collector';
 import type { EventBus } from '../stream/EventBus';
@@ -93,7 +94,7 @@ export function Pane({
         )}
         {bus && messageId && collector && (
           <PaneContext.Provider value={collector}>
-            <Profiler id={collector.paneId} onRender={(_id, _phase, actualDuration) => collector.onCommit(actualDuration)}>
+            <Profiler id={collector.paneId} onRender={(_id, _phase, actualDuration) => collector.onCommit(slowCommit(actualDuration))}>
               <Message bus={bus} messageId={messageId} />
             </Profiler>
           </PaneContext.Provider>

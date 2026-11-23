@@ -228,6 +228,22 @@ button {
   background: var(--panel-2);
 }
 
+.cpu-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cpu-select select {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+}
+.cpu-select select option {
+  background: var(--panel);
+}
+
 /* ── HUD: a left-hand column, readable from the back of a room ─────── */
 .hud {
   grid-area: hud;
@@ -705,6 +721,7 @@ html.jank-flash body::after {
 
 .panes {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
 }
 
@@ -1365,5 +1382,186 @@ html.presenter .badge {
   .is-compare .panes {
     grid-template-columns: 1fr;
     overflow-y: auto;
+  }
+}
+
+/* ── Tablet: frames tiles in one row so the numbers fit the HUD band ───── */
+@media (max-width: 900px) {
+  .segmented button {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .hud-frames .tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .hud-frames .tile-wide {
+    grid-column: 1 / -1;
+  }
+  .hud-frames .tile-value,
+  html.presenter .hud-frames .tile-value {
+    font-size: clamp(28px, 5vw, 44px);
+  }
+  .hud-frames .tile-wide .tile-value,
+  html.presenter .hud-frames .tile-wide .tile-value {
+    font-size: clamp(34px, 6vw, 56px);
+  }
+  .hud-frames .hud-strip .canvas-wrap {
+    height: 64px;
+  }
+}
+
+/* ── Phone: topbar, HUD and composer shrink so the answer stays visible ── */
+@media (max-width: 640px) {
+  .topbar {
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  .badge {
+    display: none;
+  }
+  .top-actions {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .top-actions > * {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .chip {
+    padding: 4px 10px;
+    font-size: 13px;
+  }
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+  .segmented {
+    scrollbar-width: none;
+  }
+  .segmented button {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  /* HUD: a fixed bar along the bottom, always visible. Frames only: the
+     strip (red = dropped/long) plus browser frames, dropped and slow. */
+  .app {
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: 'top' 'banner' 'stage' 'composer' 'hud';
+  }
+  .hud {
+    max-height: none;
+    overflow: hidden;
+    gap: 0;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    border-bottom: 0;
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 24px rgb(0 0 0 / 0.35);
+  }
+  .hud > .hud-section:not(.hud-frames),
+  .hud-frames .legend,
+  .hud-heartbeat,
+  .hud-frames .tiles > .tile:nth-child(n + 4),
+  .hud-frames .tile-sub,
+  .hud-frames .tile-unit {
+    display: none;
+  }
+  .hud-frames {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'head strip' 'tiles tiles';
+    align-items: center;
+    gap: 6px 10px;
+  }
+  .hud-frames .hud-head {
+    grid-area: head;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .hud-frames .hud-head h2 {
+    font-size: 11px;
+  }
+  .hud-frames .hud-strip {
+    grid-area: strip;
+  }
+  .hud-frames .hud-strip .canvas-wrap {
+    height: 34px;
+  }
+  .hud-frames .tiles {
+    grid-area: tiles;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .hud-frames .tile-wide {
+    grid-column: auto;
+  }
+  .hud-frames .tile {
+    padding: 6px 10px;
+  }
+  .hud-frames .tile-label {
+    font-size: 11px;
+  }
+  .hud-frames .tile-value,
+  .hud-frames .tile-wide .tile-value,
+  html.presenter .hud-frames .tile-value,
+  html.presenter .hud-frames .tile-wide .tile-value {
+    font-size: 24px;
+  }
+  .hud-fps,
+  html.presenter .hud-fps {
+    font-size: 22px;
+  }
+
+  /* Transcript. */
+  .transcript {
+    padding: 16px 14px 24px;
+  }
+  .md,
+  .msg-user p,
+  .empty {
+    font-size: 16px;
+  }
+  .md pre {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+
+  .md h1 {
+    font-size: 24px;
+  }
+  .md h2 {
+    font-size: 20px;
+  }
+  .md h3 {
+    font-size: 17px;
+  }
+
+  /* Composer: tabs, then recording · speed · button on one row. */
+  .composer {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .composer .field {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .composer .field:has(select[aria-label]),
+  .composer .field select {
+    width: 100%;
+  }
+  .probe,
+  .composer .toggle {
+    display: none;
+  }
+  .composer .feed-tabs {
+    flex: 1 1 100%;
+  }
+  .composer .btn {
+    flex: 0 0 auto;
+  }
+  .ask {
+    flex: 1 1 100%;
   }
 }

@@ -5,6 +5,7 @@ import { Pane, type PaneStatus } from './chat/Pane';
 import { Probe } from './chat/Probe';
 import { AskBar } from './chat/AskBar';
 import { BUILD, FLAGS, GEMINI, PROFILER_ACTIVE, REACT_VERSION } from './config';
+import { CPU_FACTORS, setCpuFactor } from './debug/cpuThrottle';
 import { renderFlash, useRenderFlash } from './debug/renderFlash';
 import { Hud } from './hud/Hud';
 import type { HudController } from './hud/controller';
@@ -58,7 +59,7 @@ function isTyping(target: EventTarget | null) {
 }
 
 export function App() {
-  const [strategy, setStrategy] = useState<StrategyId>('setState');
+  const [strategy, setStrategy] = useState<StrategyId>(() => STRATEGIES.find((s) => s.id === FLAGS.strategy)?.id ?? 'setState');
   const [compare, setCompare] = useState(FLAGS.compare);
   const [presenter, setPresenter] = useState(FLAGS.presenter);
   /** Live modes: a real Gemini chat in one useSyncExternalStore pane, plain or with A2UI. */
@@ -75,8 +76,9 @@ export function App() {
   const [apiUrl, setApiUrl] = useState(FLAGS.api);
   const [serverPaces, setServerPaces] = useState(true);
   const [recordings, setRecordings] = useState<RecordingMeta[]>([]);
-  const [recordingId, setRecordingId] = useState('demo-3k');
-  const [rate, setRate] = useState(5);
+  const [recordingId, setRecordingId] = useState(FLAGS.recording || 'demo-3k');
+  const [rate, setRate] = useState(RATES.includes(FLAGS.rate) ? FLAGS.rate : 5);
+  const [cpu, setCpu] = useState(CPU_FACTORS.includes(FLAGS.cpu) ? FLAGS.cpu : 1);
   const [run, setRun] = useState<RunView | null>(null);
   const [result, setResult] = useState<RunResult | null>(null);
   const [deviceMs, setDeviceMs] = useState<number | null>(null);
@@ -120,6 +122,22 @@ export function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('presenter', presenter);
   }, [presenter]);
+
+  useEffect(() => setCpuFactor(cpu), [cpu]);
+
+  // Keep the current selection in the URL, so a setup can be shared or reloaded.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const p = url.searchParams;
+    p.set('mode', live || (compare ? 'compare' : 'single'));
+    if (live) p.delete('strategy');
+    else p.set('strategy', strategy);
+    p.set('recording', recordingId);
+    p.set('rate', String(rate));
+    p.set('cpu', String(cpu));
+    p.set('flash', flashOn ? '1' : '0');
+    window.history.replaceState(null, '', url);
+  }, [live, compare, strategy, recordingId, rate, cpu, flashOn]);
 
   const recording = recordings.find((r) => r.id === recordingId);
 
@@ -373,10 +391,20 @@ export function App() {
             className={`chip ${flashOn ? 'on' : ''}`}
             onClick={renderFlash.toggle}
             aria-pressed={flashOn}
-            title="Light up each component every time it re-renders (key F). Adds a little overhead to the numbers."
+            title="Light up each component every time it re-renders: cyan on time, orange when the frame dropped (key F). Adds a little overhead to the numbers."
           >
             Flash renders
           </button>
+          <label className="chip cpu-select" title="Simulated CPU throttle: each commit also blocks the main thread for (N - 1) times its render time">
+            CPU
+            <select value={cpu} onChange={(e) => setCpu(Number(e.target.value))} disabled={running} aria-label="Simulated CPU throttle">
+              {CPU_FACTORS.map((f) => (
+                <option key={f} value={f}>
+                  {f}×
+                </option>
+              ))}
+            </select>
+          </label>
           <button type="button" className={`chip ${presenter ? 'on' : ''}`} onClick={() => setPresenter((p) => !p)} aria-pressed={presenter}>
             Presenter
           </button>
