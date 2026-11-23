@@ -6,9 +6,9 @@ import { currentRun, onFrame } from '../metrics/monitor';
  * Every page load picks one animal at random: duck, cat, frog or dog. A
  * refresh rolls again. Nobody chooses it.
  *
- * Sounds are synthesised with Web Audio (no audio files, no licences).
- * The voices only touch `ac.currentTime`, `ac.sampleRate` and node
- * factories, so they also render offline (see `renderVoice`).
+ * Sounds are real recordings from Wikimedia Commons (public/sounds; credits
+ * in CREDITS.md there). Synthesised voices cover the moment before a file
+ * has loaded, or a failed load; they render offline too (`renderVoice`).
  * Browsers only allow audio after a user gesture: the Audio button is one;
  * with ?audio=1 the sound starts on the first click or key press.
  */
@@ -212,26 +212,66 @@ export async function renderVoice(name: Animal, sampleRate = 44100): Promise<Aud
 }
 
 /** Plays this page's animal once. */
+// Real recordings (public/sounds, credits in public/sounds/CREDITS.md),
+// decoded once into an AudioBuffer so each play is instant. The synthesised
+// voices above are the fallback while a file loads, or if it fails.
+const recordings = new Map<Animal, AudioBuffer | null>();
+let loading: Promise<void> | null = null;
+
+function loadRecording(ac: AudioContext) {
+  loading ??= fetch(`${import.meta.env.BASE_URL}sounds/${animal}.mp3`)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+    .then((data) => ac.decodeAudioData(data))
+    .then((buffer) => {
+      recordings.set(animal, buffer);
+    })
+    .catch(() => {
+      recordings.set(animal, null);
+    });
+}
+
+function play(ac: AudioContext) {
+  const buffer = recordings.get(animal);
+  if (buffer) {
+    const src = ac.createBufferSource();
+    const gain = ac.createGain();
+    src.buffer = buffer;
+    gain.gain.value = 0.8;
+    src.connect(gain).connect(ac.destination);
+    src.start();
+  } else {
+    VOICES[animal].play(ac, ac.currentTime);
+  }
+}
+
+/** Plays this page's animal once. */
 export function playDropSound() {
   const ac = context();
   if (!ac) return;
-  const voice = VOICES[animal];
-  if (ac.state === 'running') voice.play(ac, ac.currentTime);
-  else ac.resume().then(() => voice.play(ac, ac.currentTime), () => {});
+  loadRecording(ac);
+  if (ac.state === 'running') play(ac);
+  else ac.resume().then(() => play(ac), () => {});
+}
+
+/** Spacing between sounds: the recording's length, or the synth voice's. */
+function gapMs() {
+  const buffer = recordings.get(animal);
+  return buffer ? buffer.duration * 1000 : VOICES[animal].gapMs;
 }
 
 // One sound per dropped frame during a run, spaced so they don't overlap.
 onFrame(({ cls }) => {
   if (!enabled || !currentRun() || (cls !== 'dropped' && cls !== 'long')) return;
   const now = performance.now();
-  if (now - last < VOICES[animal].gapMs) return;
+  if (now - last < gapMs()) return;
   last = now;
   playDropSound();
 });
 
 // ?audio=1: unlock on the first gesture.
 const unlock = () => {
-  if (enabled) context();
+  const ac = enabled ? context() : null;
+  if (ac) loadRecording(ac);
   window.removeEventListener('pointerdown', unlock);
   window.removeEventListener('keydown', unlock);
 };
@@ -246,7 +286,14 @@ export const dropSound = {
   getSnapshot: () => enabled,
   toggle() {
     enabled = !enabled;
-    if (enabled) playDropSound(); // a test sound, so you know it works
+    if (enabled) {
+      // A test sound, so you know it works: wait for the recording first.
+      const ac = context();
+      if (ac) {
+        loadRecording(ac);
+        void loading?.then(playDropSound);
+      }
+    }
     listeners.forEach((l) => l());
   },
 };
