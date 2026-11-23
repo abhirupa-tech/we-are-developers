@@ -3,12 +3,12 @@ import { currentRun, onFrame } from '../metrics/monitor';
 /**
  * Drop sound: an animal noise for every dropped frame during a run.
  *
- * Each browser session gets one animal, picked at random: duck, cat, frog or
- * dog. It's kept in sessionStorage, so a refresh keeps the same animal, and
- * closing the tab or browser and opening the URL again rolls a new one.
- * Nobody chooses it.
+ * Every page load picks one animal at random: duck, cat, frog or dog. A
+ * refresh rolls again. Nobody chooses it.
  *
  * Sounds are synthesised with Web Audio (no audio files, no licences).
+ * The voices only touch `ac.currentTime`, `ac.sampleRate` and node
+ * factories, so they also render offline (see `renderVoice`).
  * Browsers only allow audio after a user gesture: the Audio button is one;
  * with ?audio=1 the sound starts on the first click or key press.
  */
@@ -17,24 +17,7 @@ export type Animal = 'duck' | 'cat' | 'frog' | 'dog';
 const ANIMALS: Animal[] = ['duck', 'cat', 'frog', 'dog'];
 export const ANIMAL_EMOJI: Record<Animal, string> = { duck: '🦆', cat: '🐱', frog: '🐸', dog: '🐶' };
 
-function pickAnimal(): Animal {
-  const KEY = 'dropSoundAnimal';
-  try {
-    const saved = sessionStorage.getItem(KEY) as Animal | null;
-    if (saved && ANIMALS.includes(saved)) return saved;
-  } catch {
-    // Storage blocked: still pick, just not sticky across refreshes.
-  }
-  const animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
-  try {
-    sessionStorage.setItem(KEY, animal);
-  } catch {
-    // ignore
-  }
-  return animal;
-}
-
-export const animal: Animal = pickAnimal();
+export const animal: Animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
 
 let enabled = new URLSearchParams(window.location.search).get('audio') === '1';
 let ctx: AudioContext | null = null;
@@ -125,51 +108,110 @@ function frog(ac: AudioContext, t: number) {
     const low = ac.createBiquadFilter();
     low.type = 'lowpass';
     low.frequency.value = 1100;
-    const amp = envelope(ac, s, end, 0.35);
-    wobble(ac, amp.gain, 28, 0.15, s, end); // the buzz
+    const amp = envelope(ac, s, end, 0.14);
+    wobble(ac, amp.gain, 28, 0.06, s, end); // the buzz
     osc.connect(low).connect(amp).connect(ac.destination);
     osc.start(s);
     osc.stop(end);
   }
 }
 
-/** Woof: a short drop in pitch with a breathy noise burst on top. */
-function dog(ac: AudioContext, t: number) {
-  const end = t + 0.18;
-  const osc = ac.createOscillator();
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(320, t);
-  osc.frequency.exponentialRampToValueAtTime(140, end);
-  const low = ac.createBiquadFilter();
-  low.type = 'lowpass';
-  low.frequency.setValueAtTime(1800, t);
-  low.frequency.exponentialRampToValueAtTime(500, end);
-  osc.connect(low).connect(envelope(ac, t, end, 0.5)).connect(ac.destination);
-  osc.start(t);
-  osc.stop(end);
+/** Soft-clipping curve: adds the rasp and growl of a real bark. */
+function growlCurve(amount: number) {
+  const n = 1024;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    curve[i] = Math.tanh(amount * x) / Math.tanh(amount);
+  }
+  return curve;
+}
 
-  const len = Math.floor(ac.sampleRate * 0.08);
+/** One bark: "wuh-OOF". A raspy voiced burst, mouth opening then closing. */
+function bark(ac: AudioContext, t: number, f0: number, peak: number) {
+  const end = t + 0.19;
+
+  // Voice: two detuned sawtooths, pitch jumps up then drops (the "OOF").
+  const voice = ac.createGain();
+  voice.gain.value = 0.6;
+  for (const detune of [-12, 14]) {
+    const osc = ac.createOscillator();
+    osc.type = 'sawtooth';
+    osc.detune.value = detune;
+    osc.frequency.setValueAtTime(f0 * 0.75, t);
+    osc.frequency.exponentialRampToValueAtTime(f0 * 1.25, t + 0.03);
+    osc.frequency.exponentialRampToValueAtTime(f0 * 0.6, end);
+    osc.connect(voice);
+    osc.start(t);
+    osc.stop(end);
+  }
+
+  // Breath: noise under the voice, strongest at the onset.
+  const len = Math.floor(ac.sampleRate * 0.19);
   const buf = ac.createBuffer(1, len, ac.sampleRate);
   const data = buf.getChannelData(0);
   for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
   const noise = ac.createBufferSource();
   noise.buffer = buf;
-  const band = ac.createBiquadFilter();
-  band.type = 'bandpass';
-  band.frequency.value = 900;
-  band.Q.value = 1;
-  noise.connect(band).connect(envelope(ac, t, t + 0.08, 0.25)).connect(ac.destination);
+  const breath = ac.createGain();
+  breath.gain.setValueAtTime(0.5, t);
+  breath.gain.exponentialRampToValueAtTime(0.12, t + 0.08);
+  noise.connect(breath);
   noise.start(t);
+
+  // Rasp: the mix is overdriven, then amplitude-wobbled like vocal fry.
+  const drive = ac.createWaveShaper();
+  drive.curve = growlCurve(4);
+  voice.connect(drive);
+  breath.connect(drive);
+  const fry = ac.createGain();
+  fry.gain.value = 0.8;
+  drive.connect(fry);
+  wobble(ac, fry.gain, 62, 0.25, t, end);
+
+  // Mouth: low-pass opens fast (the "w"), then closes; a chest formant.
+  const mouth = ac.createBiquadFilter();
+  mouth.type = 'lowpass';
+  mouth.Q.value = 2;
+  mouth.frequency.setValueAtTime(500, t);
+  mouth.frequency.exponentialRampToValueAtTime(2600, t + 0.025);
+  mouth.frequency.exponentialRampToValueAtTime(700, end);
+  const chest = ac.createBiquadFilter();
+  chest.type = 'peaking';
+  chest.frequency.value = 900;
+  chest.Q.value = 1.5;
+  chest.gain.value = 8;
+
+  const amp = ac.createGain();
+  amp.gain.setValueAtTime(0.0001, t);
+  amp.gain.exponentialRampToValueAtTime(peak, t + 0.008);
+  amp.gain.setValueAtTime(peak, t + 0.05);
+  amp.gain.exponentialRampToValueAtTime(0.0001, end);
+
+  fry.connect(mouth).connect(chest).connect(amp).connect(ac.destination);
+}
+
+/** Woof woof: two barks, the second a touch lower and softer. */
+function dog(ac: AudioContext, t: number) {
+  bark(ac, t, 420, 0.1);
+  bark(ac, t + 0.24, 380, 0.08);
 }
 
 const VOICES: Record<Animal, { play: (ac: AudioContext, t: number) => void; gapMs: number }> = {
   duck: { play: duck, gapMs: 180 },
   cat: { play: cat, gapMs: 420 },
   frog: { play: frog, gapMs: 260 },
-  dog: { play: dog, gapMs: 200 },
+  dog: { play: dog, gapMs: 480 },
 };
 
-/** Plays this session's animal once. */
+/** Renders one animal into an offline buffer, for previews and tests. */
+export async function renderVoice(name: Animal, sampleRate = 44100): Promise<AudioBuffer> {
+  const off = new OfflineAudioContext(1, Math.ceil(sampleRate * 0.7), sampleRate);
+  VOICES[name].play(off as unknown as AudioContext, 0.02);
+  return off.startRendering();
+}
+
+/** Plays this page's animal once. */
 export function playDropSound() {
   const ac = context();
   if (!ac) return;
