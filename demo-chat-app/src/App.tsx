@@ -6,7 +6,7 @@ import { Probe } from './chat/Probe';
 import { AskBar } from './chat/AskBar';
 import { BUILD, FLAGS, GEMINI, PROFILER_ACTIVE, REACT_VERSION } from './config';
 import { CPU_FACTORS, setCpuFactor } from './debug/cpuThrottle';
-import { quackAudio } from './debug/quack';
+import { ANIMAL_EMOJI, animal, dropSound } from './debug/dropSound';
 import { renderFlash, useRenderFlash } from './debug/renderFlash';
 import { Hud } from './hud/Hud';
 import type { HudController } from './hud/controller';
@@ -68,7 +68,7 @@ export function App() {
   /** The strategy panes' feed: a real Gemini answer, or a recording (the fallback). */
   const [feed, setFeed] = useState<Feed>(GEMINI.apiKey && !FLAGS.api ? 'gemini' : 'recorded');
   const flashOn = useSyncExternalStore(renderFlash.subscribe, renderFlash.getSnapshot);
-  const audioOn = useSyncExternalStore(quackAudio.subscribe, quackAudio.getSnapshot);
+  const audioOn = useSyncExternalStore(dropSound.subscribe, dropSound.getSnapshot);
   const appRef = useRenderFlash<HTMLDivElement>('App');
   const [ghostsOn, setGhostsOn] = useState(true);
   const [autoProbe, setAutoProbe] = useState(true);
@@ -314,7 +314,7 @@ export function App() {
       if (k === '1' || k === '2' || k === '3') switchTo(STRATEGIES[Number(k) - 1].id);
       else if (k === '4') toggleLive('a2ui');
       else if (k === 'f') renderFlash.toggle();
-      else if (k === 'a') quackAudio.toggle();
+      else if (k === 'a') dropSound.toggle();
       else if (k === ' ') {
         e.preventDefault();
         if (running) stop();
@@ -402,11 +402,11 @@ export function App() {
           <button
             type="button"
             className={`chip ${audioOn ? 'on' : ''}`}
-            onClick={quackAudio.toggle}
+            onClick={dropSound.toggle}
             aria-pressed={audioOn}
-            title="Quack on every dropped frame during a run (key A)"
+            title={`A ${animal} sound on every dropped frame during a run (key A). The animal is picked at random for each browser session.`}
           >
-            {audioOn ? '🔊' : '🔇'} Audio
+            {audioOn ? '🔊' : '🔇'} Audio {ANIMAL_EMOJI[animal]}
           </button>
           <label className="chip cpu-select" title="Simulated CPU throttle: each commit also blocks the main thread for (N - 1) times its render time">
             CPU
@@ -633,7 +633,7 @@ export function App() {
               <dt>
                 <kbd>A</kbd>
               </dt>
-              <dd>Audio: quack on every dropped frame</dd>
+              <dd>Audio: an animal sound on every dropped frame</dd>
               <dt>
                 <kbd>?</kbd>
               </dt>
