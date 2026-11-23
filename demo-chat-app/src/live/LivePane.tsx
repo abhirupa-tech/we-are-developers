@@ -17,7 +17,7 @@ import { A2uiContext } from '../a2ui/Surface';
 import type { A2Action } from '../a2ui/types';
 import { AssistantMessage, PaneContext, useRenderCount } from '../chat/AssistantMessage';
 import type { PaneStatus } from '../chat/Pane';
-import { GEMINI } from '../config';
+import { GEMINI, IS_PHONE } from '../config';
 import { slowCommit } from '../debug/cpuThrottle';
 import { useRenderFlash } from '../debug/renderFlash';
 import type { RunCollector } from '../metrics/collector';
@@ -355,7 +355,7 @@ export function LivePane({
   const ref = useRenderFlash<HTMLElement>('LivePane');
   const running = status === 'streaming' || status === 'stalled';
   const hasKey = !!GEMINI.apiKey;
-  const [feed, setFeed] = useState<'gemini' | 'recorded'>(hasKey ? 'gemini' : 'recorded');
+  const [feed, setFeed] = useState<'gemini' | 'recorded'>(hasKey && !IS_PHONE ? 'gemini' : 'recorded');
   const showReplay = feed === 'recorded' || !hasKey;
 
   // Stick to the bottom unless the reader scrolls up.
@@ -464,7 +464,7 @@ export function LivePane({
       </div>
 
       <div className="px-4 pt-1 pb-4">
-        <div className="mx-auto mb-2 flex w-full max-w-3xl">
+        <div className="live-feed-tabs mx-auto mb-2 flex w-full max-w-3xl">
           <div className="feed-tabs" role="tablist" aria-label="Answer source">
             <button type="button" role="tab" aria-selected={!showReplay} className={!showReplay ? 'on' : ''} disabled={running || !hasKey} onClick={() => setFeed('gemini')}>
               Ask Gemini

@@ -125,9 +125,21 @@ button {
   color: var(--s-store);
 }
 
-.brand-animal {
-  font-size: 1.15em;
+.brand-animals {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   line-height: 1;
+}
+.brand-animals > span {
+  font-size: 0.9em;
+  opacity: 0.35;
+  filter: grayscale(0.6);
+}
+.brand-animals > .is-picked {
+  font-size: 1.25em;
+  opacity: 1;
+  filter: none;
 }
 
 .brand,
@@ -265,6 +277,13 @@ button {
 }
 .cpu-select select option {
   background: var(--panel);
+}
+
+/* Phone-only menu pieces: hidden on larger screens. */
+.menu-btn,
+.menu-field,
+.menu-backdrop {
+  display: none;
 }
 
 /* ── HUD: a left-hand column, readable from the back of a room ─────── */
@@ -1020,6 +1039,7 @@ html.jank-flash body::after {
 }
 
 .field select,
+.menu-field select,
 .probe input,
 .text {
   height: 38px;
@@ -1443,14 +1463,60 @@ html.presenter .badge {
   .badge {
     display: none;
   }
-  .top-actions {
-    width: 100%;
-    overflow-x: auto;
-    scrollbar-width: none;
+  /* ☰ menu: recording, speed, CPU and the toggles live in a dropdown. */
+  .menu-btn {
+    display: grid;
+    place-items: center;
+    margin-left: auto;
+    font-size: 16px;
   }
-  .top-actions > * {
-    flex-shrink: 0;
-    white-space: nowrap;
+  .top-actions {
+    display: none;
+    position: fixed;
+    top: 52px;
+    right: 12px;
+    z-index: 40;
+    width: min(300px, calc(100vw - 24px));
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+  }
+  .top-actions.is-open {
+    display: flex;
+  }
+  .top-actions > .chip,
+  .top-actions > .cpu-select {
+    justify-content: space-between;
+    padding: 8px 14px;
+    text-align: left;
+  }
+  .top-actions > .icon-btn {
+    display: none;
+  }
+  .menu-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .menu-field select {
+    width: 100%;
+  }
+  .menu-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+  }
+  .composer .field {
+    display: none;
   }
   .chip {
     padding: 4px 10px;
@@ -1579,8 +1645,11 @@ html.presenter .badge {
   .composer .toggle {
     display: none;
   }
-  .composer .feed-tabs {
-    flex: 1 1 100%;
+  .composer .feed-tabs,
+  .composer .ask,
+  .composer .model-picker,
+  .live-feed-tabs {
+    display: none;
   }
   .composer .btn {
     flex: 0 0 auto;

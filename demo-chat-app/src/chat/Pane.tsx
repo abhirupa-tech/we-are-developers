@@ -1,4 +1,5 @@
-import { memo, Profiler, type FC } from 'react';
+import { memo, Profiler, useCallback, useLayoutEffect, useRef, type FC } from 'react';
+import { IS_PHONE } from '../config';
 import { slowCommit } from '../debug/cpuThrottle';
 import { useRenderFlash } from '../debug/renderFlash';
 import type { RunCollector } from '../metrics/collector';
@@ -55,6 +56,14 @@ export function Pane({
   const Message = messageFor(strategy);
   const ref = useRenderFlash<HTMLElement>('Pane');
 
+  // Phone: keep the streaming text in view, pinned to the bottom on every commit.
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const pin = useCallback(() => {
+    const t = transcriptRef.current;
+    if (IS_PHONE && t) t.scrollTop = t.scrollHeight;
+  }, []);
+  useLayoutEffect(pin);
+
   return (
     <section
       ref={ref}
@@ -72,7 +81,7 @@ export function Pane({
           </span>
         </header>
       )}
-      <div className="transcript" role="log" aria-live="off" aria-busy={status === 'streaming'}>
+      <div ref={transcriptRef} className="transcript" role="log" aria-live="off" aria-busy={status === 'streaming'}>
         {!prompt && (
           <p className="empty">
             {emptyHint === 'gemini' ? (
@@ -94,7 +103,11 @@ export function Pane({
         )}
         {bus && messageId && collector && (
           <PaneContext.Provider value={collector}>
-            <Profiler id={collector.paneId} onRender={(_id, _phase, actualDuration) => collector.onCommit(slowCommit(actualDuration))}>
+            <Profiler id={collector.paneId} onRender={(_id, _phase, actualDuration) => {
+                collector.onCommit(slowCommit(actualDuration));
+                pin();
+              }}
+            >
               <Message bus={bus} messageId={messageId} />
             </Profiler>
           </PaneContext.Provider>
