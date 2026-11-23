@@ -34,3 +34,15 @@ describe('stage demo recording', () => {
     expect(text).toMatch(/\]\(https:\/\//);
   });
 });
+
+describe('4.5K field guide recording', () => {
+  it('is about 4,500 tokens with code, tables and links', () => {
+    const rec = RECORDINGS.find((r) => r.id === 'field-guide-4500')!;
+    const text = rec.deltas.map((d) => d.delta).join('');
+    expect(rec.tokenCount).toBeGreaterThanOrEqual(4000);
+    expect(rec.tokenCount).toBeLessThanOrEqual(4600);
+    expect(text).toContain('```');
+    expect(text).toContain('| --- |');
+    expect(text).toMatch(/\]\(https:\/\//);
+  });
+});

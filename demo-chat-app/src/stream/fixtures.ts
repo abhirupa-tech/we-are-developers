@@ -1,4 +1,4 @@
-import { DEMO_3K, HEAVY_A2UI, HEAVY_MARKDOWN } from './heavyFixtures';
+import { DEMO_3K, HEAVY_A2UI, HEAVY_FIELD_GUIDE_4500, HEAVY_MARKDOWN } from './heavyFixtures';
 import { mulberry32 } from './prng';
 import type { RecordingMeta } from './ReplaySource';
 
@@ -213,6 +213,17 @@ export const RECORDINGS: Recording[] = [
     },
     DEMO_3K,
     12,
+  ),
+  record(
+    {
+      id: 'field-guide-4500',
+      title: 'Heavy: field guide (4.5K)',
+      description: '~4,500 tokens: code, ASCII diagrams, flow charts, tables, task lists and links.',
+      prompt: 'Give me a field guide to streaming LLM answers into React, with code, diagrams and tables.',
+      contentTags: ['code', 'tables', 'diagrams', 'links', 'long'],
+    },
+    HEAVY_FIELD_GUIDE_4500,
+    14,
   ),
   record(
     {
