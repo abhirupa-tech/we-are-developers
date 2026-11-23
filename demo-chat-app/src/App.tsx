@@ -4,9 +4,9 @@ import { A2UI_SYSTEM_PROMPT } from './a2ui/prompt';
 import { Pane, type PaneStatus } from './chat/Pane';
 import { Probe } from './chat/Probe';
 import { AskBar } from './chat/AskBar';
-import { BUILD, FLAGS, GEMINI, PROFILER_ACTIVE, REACT_VERSION } from './config';
+import { BUILD, FLAGS, GEMINI, IS_PHONE, PROFILER_ACTIVE, REACT_VERSION } from './config';
 import { CPU_FACTORS, setCpuFactor } from './debug/cpuThrottle';
-import { ANIMAL_EMOJI, animal, dropSound } from './debug/dropSound';
+import { ANIMAL_EMOJI, ANIMALS, animal, dropSound } from './debug/dropSound';
 import { renderFlash, useRenderFlash } from './debug/renderFlash';
 import { Hud } from './hud/Hud';
 import type { HudController } from './hud/controller';
@@ -66,7 +66,7 @@ export function App() {
   /** Live modes: a real Gemini chat in one useSyncExternalStore pane, plain or with A2UI. */
   const [live, setLive] = useState<LiveKind | false>(FLAGS.compare ? false : FLAGS.a2ui ? 'a2ui' : FLAGS.live ? 'chat' : false);
   /** The strategy panes' feed: a real Gemini answer, or a recording (the fallback). */
-  const [feed, setFeed] = useState<Feed>(GEMINI.apiKey && !FLAGS.api ? 'gemini' : 'recorded');
+  const [feed, setFeed] = useState<Feed>(GEMINI.apiKey && !FLAGS.api && !IS_PHONE ? 'gemini' : 'recorded');
   const flashOn = useSyncExternalStore(renderFlash.subscribe, renderFlash.getSnapshot);
   const audioOn = useSyncExternalStore(dropSound.subscribe, dropSound.getSnapshot);
   const appRef = useRenderFlash<HTMLDivElement>('App');
@@ -74,6 +74,8 @@ export function App() {
   const [autoProbe, setAutoProbe] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Phone only: the ☰ menu holding the recording, speed, CPU and toggles. */
+  const [menuOpen, setMenuOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
   const [apiUrl, setApiUrl] = useState(FLAGS.api);
   const [serverPaces, setServerPaces] = useState(true);
@@ -350,8 +352,17 @@ export function App() {
             ◐
           </span>
           MockGPT
-          <span className="brand-animal" role="img" aria-label={`This page's animal: ${animal}`} title={`This page's animal: ${animal}, picked at random on every load. It makes a sound on every dropped frame when Audio is on.`}>
-            {ANIMAL_EMOJI[animal]}
+          <span
+            className="brand-animals"
+            role="img"
+            aria-label={`Drop-sound animals; this page got the ${animal}`}
+            title={`This page got the ${animal}, picked at random on every load. It makes a sound on every dropped frame when Audio is on.`}
+          >
+            {ANIMALS.map((a) => (
+              <span key={a} className={a === animal ? 'is-picked' : ''}>
+                {ANIMAL_EMOJI[a]}
+              </span>
+            ))}
           </span>
           {!presenter && (
             <span className={`badge badge-${BUILD}`} title={`React ${REACT_VERSION}`}>
@@ -389,7 +400,39 @@ export function App() {
           </button>
         </div>
 
-        <div className="top-actions">
+        <button
+          type="button"
+          className="icon-btn menu-btn"
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-label="Menu"
+          aria-expanded={menuOpen}
+          aria-controls="top-actions"
+        >
+          {menuOpen ? '✕' : '☰'}
+        </button>
+
+        <div id="top-actions" className={`top-actions ${menuOpen ? 'is-open' : ''}`}>
+          {/* Phone menu only: the replay choices that live in the footer on desktop. */}
+          <label className="menu-field">
+            <span>Response</span>
+            <select value={recordingId} onChange={(e) => setRecordingId(e.target.value)} disabled={running}>
+              {recordings.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.title} · {r.tokenCount.toLocaleString()} tokens
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="menu-field">
+            <span>Speed</span>
+            <select value={rate} onChange={(e) => setRate(Number(e.target.value))} disabled={running}>
+              {RATES.map((r) => (
+                <option key={r} value={r}>
+                  {r}x
+                </option>
+              ))}
+            </select>
+          </label>
           <button type="button" className={`chip ${compare ? 'on' : ''}`} onClick={toggleCompare} aria-pressed={compare}>
             Compare
           </button>
@@ -432,6 +475,7 @@ export function App() {
           </button>
         </div>
       </header>
+      {menuOpen && <div className="menu-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
 
       {FLAGS.hud && (
         <Hud

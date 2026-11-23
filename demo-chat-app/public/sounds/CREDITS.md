@@ -1,7 +1,12 @@
 # Sound credits
 
-Dropped-frame sounds, trimmed and loudness-normalised from Wikimedia Commons.
+Dropped-frame sounds, trimmed and loudness-matched. All from Pixabay, under
+the [Pixabay Content License](https://pixabay.com/service/license-summary/)
+(free to use, no attribution required; credited here anyway).
 
-| File | Source | Author | Licence |
-| --- | --- | --- | --- |
-| `cat.mp3` | [Meow of a Siamese cat - freemaster2.wav](https://commons.wikimedia.org/wiki/File:Meow_of_a_Siamese_cat_-_freemaster2.wav) | freemaster2 | CC0 |
+| File | Source clip | Creator |
+| --- | --- | --- |
+| `dog.mp3` | Friendly small dog bark 1 (535470) | yodguard |
+| `cat.mp3` | Cat meow 8 FX (306184) | sound_garage |
+| `rooster.mp3` | Rooster crowing (364473) | dragon-studio |
+| `duck.mp3` | Duck quack (40345) | freesound_community |

@@ -9,6 +9,9 @@ export const BUILD: BuildKind = import.meta.env.DEV ? 'dev' : import.meta.env.MO
 export const PROFILER_ACTIVE = BUILD !== 'prod';
 
 export const REACT_VERSION = reactVersion;
+
+/** Phone layout (matches the 640px breakpoint in styles.css): recordings only, no Gemini tabs. */
+export const IS_PHONE = window.matchMedia('(max-width: 640px)').matches;
 export const APP_VERSION = '0.1.0';
 
 const params = new URLSearchParams(window.location.search);
