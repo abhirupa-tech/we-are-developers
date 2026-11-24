@@ -34,6 +34,9 @@ jobs:
       # Relative base so the site works under /<repo>/ on Pages.
       # No VITE_GEMINI_API_KEY here on purpose: Vite inlines it into the public bundle.
       - run: npm run build -- --base=./
+        env:
+          # Live audience room (room-server/). A public URL, not a secret.
+          VITE_ROOM_SERVER: https://mockgpt-room.mockgpt-live.workers.dev
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

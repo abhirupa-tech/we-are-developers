@@ -6,7 +6,11 @@ import { Probe } from './chat/Probe';
 import { AskBar } from './chat/AskBar';
 import { BUILD, FLAGS, GEMINI, PROFILER_ACTIVE, REACT_VERSION } from './config';
 import { CPU_FACTORS, setCpuFactor } from './debug/cpuThrottle';
-import { ANIMAL_EMOJI, ANIMALS, animal, dropSound } from './debug/dropSound';
+import type { Round } from './room/protocol';
+import { JoinRoom, RoomChip } from './room/JoinRoom';
+import { beginReport, endReport } from './room/reporter';
+import { ROOM_ENABLED, room } from './room/roomClient';
+import { ANIMAL_EMOJI, ANIMALS, animal, dropSound, onDropSound } from './debug/dropSound';
 import { renderFlash, useRenderFlash } from './debug/renderFlash';
 import { Hud } from './hud/Hud';
 import type { HudController } from './hud/controller';
@@ -69,6 +73,10 @@ export function App() {
   const [feed, setFeed] = useState<Feed>('recorded');
   const flashOn = useSyncExternalStore(renderFlash.subscribe, renderFlash.getSnapshot);
   const audioOn = useSyncExternalStore(dropSound.subscribe, dropSound.getSnapshot);
+  /** Live room (?room=…): this device has tapped Join. */
+  const [joined, setJoined] = useState(false);
+  /** A round the presenter started, waiting for the matching settings to apply. */
+  const [pendingGo, setPendingGo] = useState<Round | null>(null);
   const appRef = useRenderFlash<HTMLDivElement>('App');
   const [ghostsOn, setGhostsOn] = useState(true);
   const [autoProbe, setAutoProbe] = useState(true);
@@ -151,6 +159,7 @@ export function App() {
     (view: RunView, outcome: RunResult['outcome'], error: string | null = null) => {
       if (view.id !== runSeq.current) return;
       const frames = endRun();
+      endReport();
       const now = performance.now();
       view.panes.forEach(({ collector }) => {
         if (Number.isNaN(collector.endedAt)) collector.endedAt = now;
@@ -199,6 +208,8 @@ export function App() {
     const frames = beginRun();
     const ids: StrategyId[] = live ? ['syncStore'] : compare ? STRATEGIES.map((s) => s.id) : [strategy];
     const panes = ids.map((s, i) => ({ strategy: s, collector: new RunCollector(`run${id}-pane${i}`, s, frames.startedAt) }));
+    // Live room: report this run (single strategy or A2UI; Compare shares one thread, so it isn't reported).
+    if (ROOM_ENABLED && !compare) beginReport(live === 'a2ui' ? 'a2ui' : ids[0], cpu, frames, panes[0].collector);
     const view: RunView = {
       id,
       source: asking ? (live ? 'chat' : 'gemini') : 'recorded',
@@ -263,7 +274,7 @@ export function App() {
       };
       waitForPaint();
     });
-  }, [recording, recordings, compare, strategy, source, rate, finalize, live, feed]);
+  }, [recording, recordings, compare, strategy, source, rate, finalize, live, feed, cpu]);
 
   // Bind the pane readouts once the panes for this run are in the DOM.
   useEffect(() => {
@@ -273,6 +284,7 @@ export function App() {
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
+    endReport();
     runSeq.current++;
     endRun();
     setRun(null);
@@ -308,6 +320,47 @@ export function App() {
   );
 
   const running = run?.status === 'streaming' || run?.status === 'stalled';
+
+  // ── Live room ─────────────────────────────────────────────────────────
+  const joinRoom = useCallback(() => {
+    if (!dropSound.getSnapshot()) dropSound.toggle(); // the tap unlocks audio
+    room.joinAsPlayer(animal, deviceMs);
+    setJoined(true);
+  }, [deviceMs]);
+
+  // Every animal noise counts towards the room's noise meter.
+  useEffect(() => onDropSound(room.sound), []);
+
+  // The presenter starts a round: apply its settings, then start once they're in.
+  useEffect(
+    () =>
+      room.onGo((round) => {
+        reset();
+        setLive(false);
+        setCompare(false);
+        setMenuOpen(false);
+        const s = STRATEGIES.find((x) => x.id === round.strategy);
+        if (s) setStrategy(s.id);
+        if (round.recording) setRecordingId(round.recording);
+        if (RATES.includes(round.rate)) setRate(round.rate);
+        if (CPU_FACTORS.includes(round.cpu)) setCpu(round.cpu);
+        setPendingGo(round);
+      }),
+    [reset],
+  );
+  useEffect(() => room.onStop(stop), [stop]);
+  useEffect(() => {
+    if (!pendingGo) return;
+    const knownStrategy = STRATEGIES.some((x) => x.id === pendingGo.strategy);
+    const knownRecording = recordings.some((r) => r.id === pendingGo.recording);
+    if (knownStrategy && strategy !== pendingGo.strategy) return;
+    if (knownRecording && recording?.id !== pendingGo.recording) return;
+    if (RATES.includes(pendingGo.rate) && rate !== pendingGo.rate) return;
+    if (CPU_FACTORS.includes(pendingGo.cpu) && cpu !== pendingGo.cpu) return;
+    if (live || compare || !recording) return;
+    setPendingGo(null);
+    start();
+  }, [pendingGo, strategy, recording, recordings, rate, cpu, live, compare, start]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -364,6 +417,7 @@ export function App() {
               </span>
             ))}
           </span>
+          {ROOM_ENABLED && joined && <RoomChip />}
           {!presenter && (
             <span className={`badge badge-${BUILD}`} title={`React ${REACT_VERSION}`}>
               {BUILD} build · React {REACT_VERSION}
@@ -476,6 +530,7 @@ export function App() {
         </div>
       </header>
       {menuOpen && <div className="menu-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+      {ROOM_ENABLED && !joined && <JoinRoom animal={animal} onJoin={joinRoom} />}
 
       {FLAGS.hud && (
         <Hud

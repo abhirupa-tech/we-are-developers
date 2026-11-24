@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { RoomScreen } from './room/RoomScreen';
 import { FLAGS } from './config';
 import 'highlight.js/styles/github-dark.css';
 import './styles.css';
@@ -16,4 +17,7 @@ const app = FLAGS.strict ? (
   <App />
 );
 
-createRoot(document.getElementById('root')!).render(app);
+// ?view=room: the projector screen for a live room.
+const view = new URLSearchParams(window.location.search).get('view');
+
+createRoot(document.getElementById('root')!).render(view === 'room' ? <RoomScreen /> : app);
