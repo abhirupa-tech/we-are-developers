@@ -24,6 +24,15 @@ let clip: AudioBuffer | null = null;
 let loading: Promise<void> | null = null;
 let last = 0;
 const listeners = new Set<() => void>();
+const soundListeners = new Set<() => void>();
+
+/** Called for every dropped-frame sound played (not the test sound). */
+export function onDropSound(listener: () => void) {
+  soundListeners.add(listener);
+  return () => {
+    soundListeners.delete(listener);
+  };
+}
 
 function context(): AudioContext | null {
   if (!ctx) {
@@ -77,6 +86,7 @@ onFrame(({ cls }) => {
   if (now - last < clip.duration * 1000) return;
   last = now;
   playDropSound();
+  soundListeners.forEach((l) => l());
 });
 
 // ?audio=1: unlock and load on the first gesture.
