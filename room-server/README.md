@@ -45,3 +45,9 @@ npx wrangler deploy                               # needs CLOUDFLARE_API_TOKEN
 
 Point the demo app at a server with `VITE_ROOM_SERVER` at build time, or
 `&server=<url>` in the page URL for testing.
+
+## Deployed
+
+`https://mockgpt-room.mockgpt-live.workers.dev` (Workers Free plan). The
+GitHub Pages build points at it through `VITE_ROOM_SERVER` in
+`.github/workflows/pages.yml`.
