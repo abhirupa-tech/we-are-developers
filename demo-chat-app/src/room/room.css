@@ -8,10 +8,9 @@
   color: var(--text);
   font-family: var(--ui);
   background:
-    radial-gradient(1200px 600px at 12% -10%, rgb(43 228 255 / 0.13), transparent 60%),
-    radial-gradient(900px 600px at 100% 0%, rgb(155 140 255 / 0.14), transparent 55%),
-    radial-gradient(900px 700px at 50% 120%, rgb(255 77 109 / 0.12), transparent 60%),
-    var(--bg);
+    radial-gradient(1400px 900px at 50% 45%, rgb(46 14 88 / 0.85), transparent 70%),
+    radial-gradient(900px 500px at 10% -10%, rgb(245 185 66 / 0.07), transparent 60%),
+    linear-gradient(180deg, #0f0619, #08030e);
 }
 
 .rs-muted {
@@ -69,7 +68,7 @@
   padding: 10px 18px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgb(18 26 51 / 0.7);
+  background: rgb(23 11 41 / 0.7);
   font-size: clamp(14px, 1.1vw, 19px);
   backdrop-filter: blur(8px);
 }
@@ -146,7 +145,7 @@
   padding: 0 16px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgb(18 26 51 / 0.7);
+  background: rgb(23 11 41 / 0.7);
   color: var(--text);
   font: inherit;
   font-size: clamp(13px, 1vw, 16px);
@@ -156,7 +155,7 @@
 
 .rs-pill-btn.on {
   border-color: var(--s-store);
-  background: rgb(43 228 255 / 0.12);
+  background: rgb(245 185 66 / 0.12);
 }
 
 .rs-icon {
@@ -183,9 +182,9 @@
 .rs-card {
   position: relative;
   padding: clamp(16px, 1.6vw, 28px);
-  border: 1px solid rgb(38 49 90 / 0.9);
+  border: 1px solid rgb(58 37 82 / 0.9);
   border-radius: 24px;
-  background: linear-gradient(180deg, rgb(23 32 66 / 0.82), rgb(18 26 51 / 0.82));
+  background: linear-gradient(180deg, rgb(32 17 56 / 0.82), rgb(23 11 41 / 0.82));
   box-shadow:
     0 1px 0 rgb(255 255 255 / 0.04) inset,
     0 24px 60px rgb(0 0 0 / 0.35);
@@ -240,7 +239,7 @@
   inset: -40% -10% auto auto;
   width: 60%;
   height: 120%;
-  background: radial-gradient(closest-side, rgb(255 77 109 / 0.22), transparent);
+  background: radial-gradient(closest-side, rgb(245 185 66 / 0.12), transparent);
   pointer-events: none;
 }
 
@@ -262,11 +261,11 @@
   line-height: 0.95;
   white-space: nowrap;
   letter-spacing: -0.04em;
-  background: linear-gradient(100deg, #fff 10%, #ffb3c1 55%, #ff4d6d 100%);
+  background: linear-gradient(100deg, #fff7ee 10%, #f6e7d9 40%, #f5b942 75%, #f0a35e 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 6px 30px rgb(255 77 109 / 0.25));
+  filter: drop-shadow(0 6px 30px rgb(245 185 66 / 0.2));
 }
 
 .rs-hero.is-hot .rs-big {
@@ -344,7 +343,7 @@
 
 
 .rs-spark .rs-grid {
-  stroke: rgb(142 152 196 / 0.15);
+  stroke: rgb(179 160 170 / 0.15);
   stroke-width: 1;
 }
 
@@ -408,7 +407,7 @@
   padding: clamp(14px, 1.3vw, 22px);
   border: 1px solid var(--line);
   border-radius: 20px;
-  background: rgb(18 26 51 / 0.78);
+  background: rgb(23 11 41 / 0.78);
 }
 
 .rs-tile span {
@@ -448,7 +447,7 @@
   align-items: center;
   gap: 8px 18px;
   padding: clamp(6px, 0.8vw, 14px) 0;
-  border-top: 1px solid rgb(38 49 90 / 0.6);
+  border-top: 1px solid rgb(58 37 82 / 0.6);
 }
 
 .rs-lane:first-of-type {
@@ -481,8 +480,8 @@
 .rs-bar {
   height: clamp(16px, 1.6vw, 26px);
   border-radius: 999px;
-  background: rgb(11 16 32 / 0.9);
-  box-shadow: inset 0 0 0 1px rgb(38 49 90 / 0.8);
+  background: rgb(15 6 25 / 0.9);
+  box-shadow: inset 0 0 0 1px rgb(58 37 82 / 0.8);
   overflow: hidden;
 }
 
@@ -591,8 +590,8 @@
   top: clamp(70px, 7vw, 96px);
   right: clamp(14px, 2vw, 32px);
   width: min(460px, calc(100vw - 28px));
-  border-color: rgb(43 228 255 / 0.45);
-  background: linear-gradient(180deg, rgb(23 32 66 / 0.97), rgb(18 26 51 / 0.97));
+  border-color: rgb(245 185 66 / 0.45);
+  background: linear-gradient(180deg, rgb(32 17 56 / 0.97), rgb(23 11 41 / 0.97));
   box-shadow: 0 30px 80px rgb(0 0 0 / 0.6);
 }
 
@@ -676,10 +675,10 @@
 .rs-go {
   flex: 1 1 auto;
   border: 0;
-  background: linear-gradient(90deg, var(--s-store), var(--s-frame));
-  color: #04121a;
+  background: linear-gradient(90deg, var(--gold), var(--peach));
+  color: #1f1206;
   font-size: 17px;
-  box-shadow: 0 10px 30px rgb(43 228 255 / 0.25);
+  box-shadow: 0 10px 30px rgb(245 185 66 / 0.25);
 }
 
 .rs-go:hover {
@@ -908,7 +907,7 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: radial-gradient(circle at 50% 40%, rgb(11 16 32 / 0.55), rgb(5 8 18 / 0.85));
+  background: radial-gradient(circle at 50% 40%, rgb(15 6 25 / 0.55), rgb(8 3 14 / 0.85));
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   animation: party-in 0.4s ease-out;
@@ -963,7 +962,7 @@
   padding: clamp(22px, 2.4vw, 40px);
   border: 2px solid var(--c);
   border-radius: 32px;
-  background: linear-gradient(180deg, rgb(23 32 66 / 0.97), rgb(18 26 51 / 0.97));
+  background: linear-gradient(180deg, rgb(32 17 56 / 0.97), rgb(23 11 41 / 0.97));
   box-shadow:
     0 0 0 8px color-mix(in srgb, var(--c) 15%, transparent),
     0 0 120px color-mix(in srgb, var(--c) 40%, transparent),
@@ -1040,13 +1039,13 @@
   padding: 10px 16px;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: rgb(11 16 32 / 0.6);
+  background: rgb(15 6 25 / 0.6);
   text-align: left;
 }
 
 .party-podium li.is-winner {
   border-color: var(--c);
-  background: color-mix(in srgb, var(--c) 12%, rgb(11 16 32 / 0.6));
+  background: color-mix(in srgb, var(--c) 12%, rgb(15 6 25 / 0.6));
 }
 
 .party-medal {
@@ -1084,7 +1083,7 @@
   border: 0;
   border-radius: 14px;
   background: var(--c);
-  color: #061018;
+  color: #1f1206;
   font: inherit;
   font-size: 17px;
   font-weight: 800;

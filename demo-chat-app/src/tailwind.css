@@ -111,8 +111,8 @@ html.flash-renders [data-flash]::after {
   z-index: 20;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgb(43 228 255);
-  color: #00161b;
+  background: rgb(246 231 217);
+  color: #1f1206;
   font: 600 10px/1.5 var(--mono);
   white-space: nowrap;
   pointer-events: none;

@@ -32,9 +32,9 @@ export type HudElements = {
 const STRIP_BAR = 3; // px per frame
 const LAG_FULL = 150; // tokens at which the gauge reads full
 const CLASS_COLOR: Record<FrameClass, string> = {
-  smooth: '#2f3f78',
-  slow: '#6f7fd8',
-  dropped: '#ffc24b',
+  smooth: '#3d2a5c',
+  slow: '#9a86c4',
+  dropped: '#f0a35e',
   long: '#ff4d6d',
 };
 const CLASS_HEIGHT: Record<FrameClass, number> = { smooth: 0.28, slow: 0.5, dropped: 0.78, long: 1 };
@@ -210,7 +210,7 @@ export function createHud(els: HudElements, opts: { getPanes: () => RunCollector
     const lat = panes[0]?.latencies.map(([, l]) => l) ?? [];
     if (lat.length) {
       ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = 'rgba(232,236,255,0.45)';
+      ctx.strokeStyle = 'rgba(246,231,217,0.45)';
       for (const p of [50, 95]) {
         const y = Y(percentile(lat, p));
         ctx.beginPath();
