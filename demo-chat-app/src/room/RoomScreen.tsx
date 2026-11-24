@@ -102,9 +102,9 @@ function Sparkline({ drops, sounds }: { drops: number[]; sounds: number[] }) {
   );
 }
 
-type Particle = { id: number; emoji: string; x: number; drift: number; size: number; delay: number };
+type Particle = { id: number; emoji: string; x: number; drift: number; size: number; delay: number; spin: number };
 
-/** Animal emojis float up the screen as the room makes noise. */
+/** Dropped frames, literally: animal emojis fall down the screen as the room makes noise. */
 function useParticles(snapshot: RoomSnapshot | null) {
   const [particles, setParticles] = useState<Particle[]>([]);
   const prev = useRef<Record<string, number>>({});
@@ -124,8 +124,9 @@ function useParticles(snapshot: RoomSnapshot | null) {
           emoji: ANIMAL_EMOJI[team],
           x: 4 + Math.random() * 92,
           drift: (Math.random() - 0.5) * 120,
-          size: 24 + Math.random() * 20,
+          size: 40 + Math.random() * 30,
           delay: Math.random() * 400,
+          spin: (Math.random() - 0.5) * 300,
         });
       }
     }
@@ -144,7 +145,7 @@ function Presenter({ snapshot, onClose }: { snapshot: RoomSnapshot | null; onClo
   // 2×: big enough gaps between the methods to be reliable on fast phones too.
   const [cpu, setCpu] = useState(2);
   // Every phone stops at the limit, so all teams are scored on the same window.
-  const [limit, setLimit] = useState(45);
+  const [limit, setLimit] = useState(30);
   const [confirmReset, setConfirmReset] = useState(false);
   const live = (snapshot?.running ?? 0) > 0;
   return (
@@ -187,7 +188,7 @@ function Presenter({ snapshot, onClose }: { snapshot: RoomSnapshot | null; onClo
         <label>
           Time limit
           <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
-            {[30, 45, 60, 90, 0].map((l) => (
+            {[30, 45, 60, 0].map((l) => (
               <option key={l} value={l}>
                 {l ? `${l} s` : 'none'}
               </option>
@@ -304,7 +305,7 @@ export function RoomScreen() {
         {particles.map((p) => (
           <span
             key={p.id}
-            style={{ left: `${p.x}%`, fontSize: p.size, animationDelay: `${p.delay}ms`, '--drift': `${p.drift}px` } as React.CSSProperties}
+            style={{ left: `${p.x}%`, fontSize: p.size, animationDelay: `${p.delay}ms`, '--drift': `${p.drift}px`, '--spin': `${p.spin}deg` } as React.CSSProperties}
           >
             {p.emoji}
           </span>

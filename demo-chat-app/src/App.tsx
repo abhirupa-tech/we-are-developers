@@ -111,6 +111,7 @@ export function App() {
   const ghostsRef = useRef(ghostsOn);
   ghostsRef.current = ghostsOn;
   const runSeq = useRef(0);
+  const finalizedId = useRef(-1);
 
   const source: ReplaySource = useMemo(
     () => (apiUrl ? new HttpReplaySource(apiUrl.replace(/\/$/, ''), serverPaces) : new MockReplaySource()),
@@ -164,7 +165,9 @@ export function App() {
   /** Ends the current run: freeze metrics, grade, keep ghosts. */
   const finalize = useCallback(
     (view: RunView, outcome: RunResult['outcome'], error: string | null = null) => {
-      if (view.id !== runSeq.current) return;
+      // Once per run: a force stop and the stream's own end can both arrive.
+      if (view.id !== runSeq.current || finalizedId.current === view.id) return;
+      finalizedId.current = view.id;
       const frames = endRun();
       endReport();
       const now = performance.now();
@@ -196,6 +199,19 @@ export function App() {
   const stop = useCallback(() => {
     abortRef.current?.abort();
   }, []);
+
+  /**
+   * Live room time limit: end the run right now, even mid-stream or while
+   * the pane is still catching up, and freeze its numbers.
+   */
+  const forceStop = useCallback(() => {
+    abortRef.current?.abort();
+    const view = runRef.current;
+    if (view && (view.status === 'streaming' || view.status === 'stalled')) finalize(view, 'stopped');
+  }, [finalize]);
+  const forceStopRef = useRef(forceStop);
+  forceStopRef.current = forceStop;
+  const limitTimer = useRef(0);
 
   /**
    * Starts a run. Strategy panes: asks Gemini `text`, or replays the selected
@@ -348,6 +364,9 @@ export function App() {
   useEffect(
     () =>
       room.onGo((round) => {
+        // Backup for the room's time limit, in case its stop message is lost.
+        clearTimeout(limitTimer.current);
+        if (round.limitMs > 0) limitTimer.current = window.setTimeout(() => forceStopRef.current(), round.limitMs + 1000);
         reset();
         setLive(false);
         setCompare(false);
@@ -361,7 +380,14 @@ export function App() {
       }),
     [reset],
   );
-  useEffect(() => room.onStop(stop), [stop]);
+  useEffect(
+    () =>
+      room.onStop(() => {
+        clearTimeout(limitTimer.current);
+        forceStopRef.current();
+      }),
+    [],
+  );
   useEffect(() => {
     if (!pendingGo) return;
     const knownRecording = recordings.some((r) => r.id === pendingGo.recording);
