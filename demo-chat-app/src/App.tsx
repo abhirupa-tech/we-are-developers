@@ -4,7 +4,7 @@ import { A2UI_SYSTEM_PROMPT } from './a2ui/prompt';
 import { Pane, type PaneStatus } from './chat/Pane';
 import { Probe } from './chat/Probe';
 import { AskBar } from './chat/AskBar';
-import { BUILD, FLAGS, GEMINI, IS_PHONE, PROFILER_ACTIVE, REACT_VERSION } from './config';
+import { BUILD, FLAGS, GEMINI, PROFILER_ACTIVE, REACT_VERSION } from './config';
 import { CPU_FACTORS, setCpuFactor } from './debug/cpuThrottle';
 import { ANIMAL_EMOJI, ANIMALS, animal, dropSound } from './debug/dropSound';
 import { renderFlash, useRenderFlash } from './debug/renderFlash';
@@ -65,8 +65,8 @@ export function App() {
   const [presenter, setPresenter] = useState(FLAGS.presenter);
   /** Live modes: a real Gemini chat in one useSyncExternalStore pane, plain or with A2UI. */
   const [live, setLive] = useState<LiveKind | false>(FLAGS.compare ? false : FLAGS.a2ui ? 'a2ui' : FLAGS.live ? 'chat' : false);
-  /** The strategy panes' feed: a real Gemini answer, or a recording (the fallback). */
-  const [feed, setFeed] = useState<Feed>(GEMINI.apiKey && !FLAGS.api && !IS_PHONE ? 'gemini' : 'recorded');
+  /** The strategy panes' feed. Always a recording: the Gemini feed is hidden in the UI. */
+  const [feed, setFeed] = useState<Feed>('recorded');
   const flashOn = useSyncExternalStore(renderFlash.subscribe, renderFlash.getSnapshot);
   const audioOn = useSyncExternalStore(dropSound.subscribe, dropSound.getSnapshot);
   const appRef = useRenderFlash<HTMLDivElement>('App');
@@ -539,14 +539,6 @@ export function App() {
       {/* Hidden in the chat modes (they have their own composer), but kept
           mounted so Auto-probe still measures responsiveness during a run. */}
       <footer className="composer" hidden={!!live}>
-        <div className="feed-tabs" role="tablist" aria-label="Answer source">
-          <button type="button" role="tab" aria-selected={feed === 'gemini'} className={feed === 'gemini' ? 'on' : ''} disabled={running} onClick={() => setFeed('gemini')}>
-            Ask Gemini
-          </button>
-          <button type="button" role="tab" aria-selected={feed === 'recorded'} className={feed === 'recorded' ? 'on' : ''} disabled={running} onClick={() => setFeed('recorded')}>
-            Pre-recorded
-          </button>
-        </div>
         {feed === 'gemini' && (
           <>
             <AskBar running={running} disabled={!GEMINI.apiKey} onAsk={start} />

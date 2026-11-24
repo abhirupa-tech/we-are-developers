@@ -1,5 +1,4 @@
 import { memo, Profiler, useCallback, useLayoutEffect, useRef, type FC } from 'react';
-import { IS_PHONE } from '../config';
 import { slowCommit } from '../debug/cpuThrottle';
 import { useRenderFlash } from '../debug/renderFlash';
 import type { RunCollector } from '../metrics/collector';
@@ -56,11 +55,11 @@ export function Pane({
   const Message = messageFor(strategy);
   const ref = useRenderFlash<HTMLElement>('Pane');
 
-  // Phone: keep the streaming text in view, pinned to the bottom on every commit.
+  // Keep the latest streaming line in view: pinned to the bottom on every commit.
   const transcriptRef = useRef<HTMLDivElement>(null);
   const pin = useCallback(() => {
     const t = transcriptRef.current;
-    if (IS_PHONE && t) t.scrollTop = t.scrollHeight;
+    if (t) t.scrollTop = t.scrollHeight;
   }, []);
   useLayoutEffect(pin);
 

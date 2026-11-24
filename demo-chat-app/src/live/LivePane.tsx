@@ -8,8 +8,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type RefObject,
-  type UIEvent,
 } from 'react';
 import { decodeAction, encodeAction } from '../a2ui/parse';
 import { renderA2ui } from '../a2ui/renderA2ui';
@@ -17,7 +15,7 @@ import { A2uiContext } from '../a2ui/Surface';
 import type { A2Action } from '../a2ui/types';
 import { AssistantMessage, PaneContext, useRenderCount } from '../chat/AssistantMessage';
 import type { PaneStatus } from '../chat/Pane';
-import { GEMINI, IS_PHONE } from '../config';
+import { GEMINI } from '../config';
 import { slowCommit } from '../debug/cpuThrottle';
 import { useRenderFlash } from '../debug/renderFlash';
 import type { RunCollector } from '../metrics/collector';
@@ -125,25 +123,19 @@ const Bubble = memo(function Bubble({ message, live, kind }: { message: ChatMess
 const Conversation = memo(function Conversation({
   liveMessageId,
   kind,
-  stick,
 }: {
   liveMessageId: string | null;
   kind: LiveKind;
-  stick: RefObject<boolean>;
 }) {
   useRenderCount();
   const messages = useSyncExternalStore(chatStore.subscribe, chatStore.getSnapshot);
   const ref = useRenderFlash<HTMLDivElement>('Conversation');
 
-  // Follow the newest text, unless the reader has scrolled up to read.
-  const count = useRef(0);
+  // Always follow the latest streaming line.
   useLayoutEffect(() => {
     const log = ref.current?.closest('[role="log"]');
-    if (!log) return;
-    const grew = messages.length !== count.current;
-    count.current = messages.length;
-    if (grew || stick.current) log.scrollTop = log.scrollHeight;
-  }, [messages, stick]);
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [messages]);
 
   return (
     <div ref={ref} className="live-messages flex flex-col gap-7">
@@ -355,15 +347,9 @@ export function LivePane({
   const ref = useRenderFlash<HTMLElement>('LivePane');
   const running = status === 'streaming' || status === 'stalled';
   const hasKey = !!GEMINI.apiKey;
-  const [feed, setFeed] = useState<'gemini' | 'recorded'>(hasKey && !IS_PHONE ? 'gemini' : 'recorded');
+  // Always pre-recorded: the Gemini feed is hidden in the UI.
+  const [feed, setFeed] = useState<'gemini' | 'recorded'>('recorded');
   const showReplay = feed === 'recorded' || !hasKey;
-
-  // Stick to the bottom unless the reader scrolls up.
-  const stick = useRef(true);
-  const onScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  }, []);
 
   // Surfaces get a stable callback, so a new run doesn't re-render them.
   const sendRef = useRef(onSend);
@@ -396,7 +382,7 @@ export function LivePane({
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 pt-8 pb-6" role="log" aria-live="off" aria-busy={running} onScroll={onScroll}>
+      <div className="flex-1 overflow-y-auto px-5 pt-8 pb-6" role="log" aria-live="off" aria-busy={running}>
         <div className="mx-auto max-w-3xl">
           {status === 'idle' && (
             <div className="flex flex-col items-center pt-[8vh] text-center">
@@ -436,7 +422,7 @@ export function LivePane({
           <A2uiContext.Provider value={a2ui}>
             <PaneContext.Provider value={collector}>
               <Profiler id="live-pane" onRender={(_id, _phase, actualDuration) => collector?.onCommit(slowCommit(actualDuration))}>
-                <Conversation liveMessageId={messageId} kind={kind} stick={stick} />
+                <Conversation liveMessageId={messageId} kind={kind} />
               </Profiler>
             </PaneContext.Provider>
           </A2uiContext.Provider>
@@ -464,16 +450,6 @@ export function LivePane({
       </div>
 
       <div className="px-4 pt-1 pb-4">
-        <div className="live-feed-tabs mx-auto mb-2 flex w-full max-w-3xl">
-          <div className="feed-tabs" role="tablist" aria-label="Answer source">
-            <button type="button" role="tab" aria-selected={!showReplay} className={!showReplay ? 'on' : ''} disabled={running || !hasKey} onClick={() => setFeed('gemini')}>
-              Ask Gemini
-            </button>
-            <button type="button" role="tab" aria-selected={showReplay} className={showReplay ? 'on' : ''} disabled={running} onClick={() => setFeed('recorded')}>
-              Pre-recorded
-            </button>
-          </div>
-        </div>
         {showReplay ? (
           <ReplayBar kind={kind} recordings={recordings} running={running} rate={rate} rates={rates} onRate={onRate} onReplay={onReplay} onStop={onStop} />
         ) : (
