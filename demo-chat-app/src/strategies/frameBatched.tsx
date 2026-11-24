@@ -103,12 +103,12 @@ function Message({ bus, messageId }: { bus: MessageBus; messageId: string }) {
     [bus, messageId, store],
   );
   const msg = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
-  return <AssistantMessage text={msg.text} seq={msg.seq} />;
+  return <AssistantMessage text={msg.text} seq={msg.seq} blocks />;
 }
 
 export const frameBatchedStrategy: Strategy = {
   id: 'frameBatched',
-  label: 'syncStore + rAF batching',
-  note: 'External store that publishes at most once per frame, at the frame start, and skips frames when a render is too slow.',
+  label: 'syncStore + rAF + memo',
+  note: 'External store publishing at most once per frame, plus frozen memo blocks: fewest renders, cheapest renders.',
   Message,
 };

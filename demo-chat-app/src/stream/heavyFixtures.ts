@@ -362,11 +362,11 @@ About **three thousand tokens** of prose, highlighted code, diagrams, tables and
   markdownChapter,
   `## Summary
 
-| Strategy | Renders | Aligned to frames | Dropped frames |
+| Strategy | Renders | Work per render | Dropped frames |
 | --- | --- | --- | --- |
-| \`setState\` | one per network task | no | most |
-| \`setState\` + 50 ms buffer | about 20 per second | no | fewer |
-| \`useSyncExternalStore\` + rAF | at most one per frame | yes | fewest |
+| \`setState\` | one per network task | the whole answer | most |
+| \`setState\` + \`React.memo\` freeze | one per network task | the streaming block | fewer |
+| \`useSyncExternalStore\` + rAF + memo | at most one per frame | the streaming block | fewest |
 
 \`\`\`ts
 // The winner, in one line: buffer outside React, publish once per frame.
@@ -392,11 +392,11 @@ About **four and a half thousand tokens** of headings, highlighted code, ASCII a
   markdownChapter,
   `## Summary
 
-| Strategy | Renders | Aligned to frames | Dropped frames |
+| Strategy | Renders | Work per render | Dropped frames |
 | --- | --- | --- | --- |
-| \`setState\` | one per network task | no | most |
-| \`setState\` + 50 ms buffer | about 20 per second | no | fewer |
-| \`useSyncExternalStore\` + rAF | at most one per frame | yes | fewest |
+| \`setState\` | one per network task | the whole answer | most |
+| \`setState\` + \`React.memo\` freeze | one per network task | the streaming block | fewer |
+| \`useSyncExternalStore\` + rAF + memo | at most one per frame | the streaming block | fewest |
 
 ## FAQ
 

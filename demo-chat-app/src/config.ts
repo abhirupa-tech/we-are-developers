@@ -27,7 +27,7 @@ export const FLAGS = {
   live: params.get('mode') === 'live',
   /** ?mode=a2ui starts in A2UI mode (Gemini answering with interactive UI). */
   a2ui: params.get('mode') === 'a2ui',
-  /** ?strategy=setState|buffered|frameBatched picks the strategy. */
+  /** ?strategy=setState|memo|frameBatched picks the strategy. */
   strategy: params.get('strategy') ?? '',
   /** ?recording=demo-3k picks the pre-recorded answer. */
   recording: params.get('recording') ?? '',

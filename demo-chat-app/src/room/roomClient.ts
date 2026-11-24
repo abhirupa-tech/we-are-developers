@@ -1,4 +1,5 @@
-import type { ClientMessage, Round, RoomSnapshot, RunStats, ServerMessage } from './protocol';
+import { setAnimal } from '../debug/dropSound';
+import type { ClientMessage, Round, RoomSnapshot, RunStats, ServerMessage, Team } from './protocol';
 
 /**
  * Connects this page to a live room (?room=<name>), so a whole audience can
@@ -19,12 +20,14 @@ export type RoomStatus = {
   connected: boolean;
   joined: boolean;
   presenter: boolean;
+  /** The team the room assigned this phone. */
+  team: Team | null;
   snapshot: RoomSnapshot | null;
   error: string | null;
 };
 
 const id = crypto.randomUUID();
-let status: RoomStatus = { connected: false, joined: false, presenter: false, snapshot: null, error: null };
+let status: RoomStatus = { connected: false, joined: false, presenter: false, team: null, snapshot: null, error: null };
 const listeners = new Set<() => void>();
 const goListeners = new Set<(round: Round) => void>();
 const stopListeners = new Set<() => void>();
@@ -63,7 +66,14 @@ function connect() {
     }
     if (msg.t === 'room') set({ snapshot: msg });
     else if (msg.t === 'welcome') {
-      set({ presenter: msg.presenter, joined: true });
+      if (msg.team) {
+        setAnimal(msg.team);
+        if (hello?.role === 'player') hello = { ...hello, team: msg.team };
+      }
+      set({ presenter: msg.presenter, joined: true, team: msg.team ?? status.team });
+    } else if (msg.t === 'rejoin') {
+      // The room was reset: join again (keeping our team if the room can).
+      if (hello && ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(hello));
     } else if (msg.t === 'go') {
       const { t: _t, ...round } = msg;
       goListeners.forEach((l) => l(round));
@@ -103,9 +113,9 @@ export const room = {
   },
   getSnapshot: () => status,
 
-  /** Audience device: join with this page's animal. */
-  joinAsPlayer(animal: string, deviceMs: number | null) {
-    hello = { t: 'hello', id, role: 'player', animal, mobile: matchMedia('(pointer: coarse)').matches, deviceMs };
+  /** Audience device: join; the room assigns a team. */
+  joinAsPlayer(deviceMs: number | null) {
+    hello = { t: 'hello', id, role: 'player', mobile: matchMedia('(pointer: coarse)').matches, deviceMs };
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(hello));
     else connect();
   },
@@ -130,7 +140,7 @@ export const room = {
     if (pendingSounds === 1) setTimeout(flush, 500);
   },
 
-  start(round: Omit<Round, 'startedAt'>) {
+  start(round: Omit<Round, 'startedAt' | 'id'>) {
     send({ t: 'start', ...round });
   },
   stop() {

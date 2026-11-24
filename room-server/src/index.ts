@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { ClientMessage, Round, RoomSnapshot, RunStats, ServerMessage, Totals } from './protocol';
+import { TEAMS, type ClientMessage, type Round, type RoomSnapshot, type RunStats, type ServerMessage, type Team, type TeamStats, type Totals } from './protocol';
 
 export interface Env {
   ROOM: DurableObjectNamespace<Room>;
@@ -13,14 +13,16 @@ const MAX_MESSAGE_BYTES = 4096;
 
 type Device = {
   id: string;
-  animal: string;
+  team: Team;
   mobile: boolean;
   deviceMs: number | null;
   sounds: number;
   /** The run in progress, if any (cumulative so far). */
   live: RunStats | null;
-  /** Finished runs, summed per strategy. */
+  /** Finished runs, summed per strategy (all rounds). */
   done: Record<string, Totals>;
+  /** This device's finished run for the current round. */
+  roundFinal: RunStats | null;
   lastSeen: number;
 };
 
@@ -28,6 +30,8 @@ type Saved = {
   devices: Record<string, Device>;
   presenterKey: string | null;
   round: Round | null;
+  /** Phones online when the current round started. */
+  participants: string[];
   dropsPerSec: number[];
   soundsPerSec: number[];
 };
@@ -35,8 +39,9 @@ type Saved = {
 type Attachment = { id: string; role: 'player' | 'screen'; presenter: boolean };
 
 const zero = (): Totals => ({ frames: 0, dropped: 0, slow: 0, long: 0, commits: 0, renderMs: 0, runs: 0, worst: 0 });
+const empty = (): Saved => ({ devices: {}, presenterKey: null, round: null, participants: [], dropsPerSec: [], soundsPerSec: [] });
 
-function add(into: Totals, run: Omit<RunStats, 'runId' | 'strategy' | 'cpu'> | Totals, runs = 1) {
+function add(into: Totals, run: Totals | RunStats, runs = 1) {
   into.frames += run.frames;
   into.dropped += run.dropped;
   into.slow += run.slow;
@@ -49,6 +54,7 @@ function add(into: Totals, run: Omit<RunStats, 'runId' | 'strategy' | 'cpu'> | T
 
 const num = (v: unknown, max = 1e9) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(Math.max(v, 0), max) : 0);
 const str = (v: unknown, max = 40) => (typeof v === 'string' ? v.slice(0, max) : '');
+const isTeam = (v: unknown): v is Team => typeof v === 'string' && (TEAMS as readonly string[]).includes(v);
 
 function cleanRun(r: unknown): RunStats | null {
   if (!r || typeof r !== 'object') return null;
@@ -67,26 +73,28 @@ function cleanRun(r: unknown): RunStats | null {
     worst: num(o.worst, 60_000),
     commits: num(o.commits, 1e6),
     renderMs: num(o.renderMs, 1e7),
+    round: typeof o.round === 'number' && Number.isFinite(o.round) ? o.round : undefined,
   };
 }
 
 /** One room: every device in the audience reports here; screens get live totals. */
 export class Room extends DurableObject<Env> {
-  private state: Saved = { devices: {}, presenterKey: null, round: null, dropsPerSec: [], soundsPerSec: [] };
+  private state: Saved = empty();
   private roomName = '';
   private lastDropped = 0;
   private lastSounds = 0;
   private lastSave = 0;
   private dirty = false;
+  private tickCount = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
       const saved = await ctx.storage.get<Saved>('state');
-      if (saved) this.state = saved;
+      // Rooms saved before teams existed start fresh.
+      if (saved && Array.isArray(saved.participants)) this.state = saved;
+      else if (saved) this.state = { ...empty(), presenterKey: saved.presenterKey ?? null };
       this.roomName = (await ctx.storage.get<string>('name')) ?? '';
-      this.lastDropped = this.totals().dropped;
-      this.lastSounds = this.soundTotal();
     });
   }
 
@@ -130,16 +138,27 @@ export class Room extends DurableObject<Env> {
         ws.serializeAttachment({ id, role: 'screen', presenter } satisfies Attachment);
         this.send(ws, { t: 'welcome', presenter });
         this.send(ws, this.snapshot());
-        if (this.state.round) this.send(ws, { t: 'go', ...this.state.round });
       } else {
-        if (!this.state.devices[id] && Object.keys(this.state.devices).length >= MAX_DEVICES) return;
-        const d = (this.state.devices[id] ??= { id, animal: '', mobile: false, deviceMs: null, sounds: 0, live: null, done: {}, lastSeen: now });
-        d.animal = str(msg.animal, 16) || d.animal;
+        let d = this.state.devices[id];
+        if (!d) {
+          if (Object.keys(this.state.devices).length >= MAX_DEVICES) return;
+          d = this.state.devices[id] = {
+            id,
+            team: this.assignTeam(msg.team),
+            mobile: false,
+            deviceMs: null,
+            sounds: 0,
+            live: null,
+            done: {},
+            roundFinal: null,
+            lastSeen: now,
+          };
+        }
         d.mobile = !!msg.mobile;
         d.deviceMs = msg.deviceMs == null ? null : num(msg.deviceMs, 10_000);
         d.lastSeen = now;
         ws.serializeAttachment({ id, role: 'player', presenter: false } satisfies Attachment);
-        this.send(ws, { t: 'welcome', presenter: false });
+        this.send(ws, { t: 'welcome', presenter: false, team: d.team });
       }
       this.dirty = true;
       return;
@@ -149,7 +168,7 @@ export class Room extends DurableObject<Env> {
 
     if (me.role === 'player') {
       const d = this.state.devices[me.id];
-      if (!d) return;
+      if (!d) return this.send(ws, { t: 'rejoin' });
       d.lastSeen = now;
       if (msg.t === 'live') {
         const run = cleanRun(msg.run);
@@ -159,6 +178,7 @@ export class Room extends DurableObject<Env> {
         if (run) {
           add((d.done[run.strategy] ??= zero()), run);
           if (d.live?.runId === run.runId) d.live = null;
+          if (run.round != null && run.round === this.state.round?.id) d.roundFinal = run;
         }
       } else if (msg.t === 'sound') {
         d.sounds += Math.min(num(msg.n, 1000), 1000);
@@ -171,27 +191,27 @@ export class Room extends DurableObject<Env> {
     if (!me.presenter) return this.send(ws, { t: 'error', message: 'Only the presenter screen can do that.' });
     if (msg.t === 'start') {
       const round: Round = {
-        strategy: str(msg.strategy, 32),
+        id: now,
         recording: str(msg.recording, 64),
         rate: num(msg.rate, 100) || 5,
         cpu: num(msg.cpu, 20) || 1,
         startedAt: now,
+        limitMs: num(msg.limitMs, 600_000),
       };
       this.state.round = round;
+      this.state.participants = [...this.onlineIds()];
+      for (const d of Object.values(this.state.devices)) d.roundFinal = null;
       this.broadcast({ t: 'go', ...round }, 'player');
     } else if (msg.t === 'stop') {
-      this.state.round = null;
+      if (this.state.round) this.state.round.stopped = true;
       this.broadcast({ t: 'stop' }, 'player');
     } else if (msg.t === 'reset') {
       const key = this.state.presenterKey;
-      this.state = { devices: {}, presenterKey: key, round: null, dropsPerSec: [], soundsPerSec: [] };
+      this.state = { ...empty(), presenterKey: key };
       this.lastDropped = 0;
       this.lastSounds = 0;
-      // Devices still connected rejoin on their next message.
-      for (const ws2 of this.ctx.getWebSockets()) {
-        const a = ws2.deserializeAttachment() as Attachment | null;
-        if (a?.role === 'player') this.send(ws2, { t: 'welcome', presenter: false });
-      }
+      // Phones still connected join again (and get a team again).
+      this.broadcast({ t: 'rejoin' }, 'player');
     }
     this.dirty = true;
   }
@@ -209,28 +229,50 @@ export class Room extends DurableObject<Env> {
     this.dirty = true;
   }
 
-  // ── Tick: live snapshot to everyone, history, persistence ────────────
-  private tickCount = 0;
+  /**
+   * Balanced random teams: a new phone joins the smallest team (ties broken
+   * at random), so teams stay within one phone of each other. A phone that
+   * rejoins after a reset keeps its team if that doesn't unbalance things.
+   */
+  private assignTeam(preferred: unknown): Team {
+    const counts = Object.fromEntries(TEAMS.map((t) => [t, 0])) as Record<Team, number>;
+    for (const d of Object.values(this.state.devices)) counts[d.team]++;
+    const min = Math.min(...TEAMS.map((t) => counts[t]));
+    if (isTeam(preferred) && counts[preferred] === min) return preferred;
+    const smallest = TEAMS.filter((t) => counts[t] === min);
+    return smallest[Math.floor(Math.random() * smallest.length)];
+  }
 
+  // ── Tick: live snapshot to everyone, history, persistence ────────────
   async alarm() {
     const sockets = this.ctx.getWebSockets();
     const now = Date.now();
     this.tickCount++;
+    // Time limit: stop every phone at once, so all teams get the same window.
+    const r = this.state.round;
+    if (r && r.limitMs > 0 && !r.stopped && now - r.startedAt >= r.limitMs) {
+      r.stopped = true;
+      this.broadcast({ t: 'stop' }, 'player');
+      this.dirty = true;
+    }
+    const snap = this.snapshot();
+    if (this.tickCount === 1) {
+      // Fresh instance: start the per-second history from current totals.
+      this.lastDropped = snap.totals.dropped;
+      this.lastSounds = snap.sounds;
+    }
     if (this.tickCount % Math.round(1000 / TICK_MS) === 0) {
-      const now1 = this.snapshot();
-      const dropped = now1.totals.dropped;
-      const sounds = now1.sounds;
-      this.state.dropsPerSec = [...this.state.dropsPerSec, Math.max(0, dropped - this.lastDropped)].slice(-HISTORY_SECONDS);
-      this.state.soundsPerSec = [...this.state.soundsPerSec, Math.max(0, sounds - this.lastSounds)].slice(-HISTORY_SECONDS);
-      this.lastDropped = dropped;
-      this.lastSounds = sounds;
+      this.state.dropsPerSec = [...this.state.dropsPerSec, Math.max(0, snap.totals.dropped - this.lastDropped)].slice(-HISTORY_SECONDS);
+      this.state.soundsPerSec = [...this.state.soundsPerSec, Math.max(0, snap.sounds - this.lastSounds)].slice(-HISTORY_SECONDS);
+      this.lastDropped = snap.totals.dropped;
+      this.lastSounds = snap.sounds;
       this.dirty = true;
     }
     if (sockets.length) {
-      const snap = JSON.stringify(this.snapshot());
+      const text = JSON.stringify(snap);
       for (const ws of sockets) {
         try {
-          ws.send(snap);
+          ws.send(text);
         } catch {
           // closing
         }
@@ -254,53 +296,95 @@ export class Room extends DurableObject<Env> {
     const ids = new Set<string>();
     for (const ws of this.ctx.getWebSockets()) {
       const a = ws.deserializeAttachment() as Attachment | null;
-      if (a?.role === 'player') ids.add(a.id);
+      if (a?.role === 'player' && this.state.devices[a.id]) ids.add(a.id);
     }
     return ids;
   }
 
-  private soundTotal() {
-    return Object.values(this.state.devices).reduce((n, d) => n + d.sounds, 0);
-  }
-
-  private totals(): Totals {
-    const t = zero();
-    for (const d of Object.values(this.state.devices)) {
-      for (const s of Object.values(d.done)) add(t, s);
-      if (d.live) add(t, d.live, 0);
-    }
-    return t;
-  }
-
   private snapshot(): RoomSnapshot {
     const online = this.onlineIds();
+    const roundId = this.state.round?.id;
+    const participants = new Set(this.state.participants);
     const byStrategy: RoomSnapshot['byStrategy'] = {};
-    const byAnimal: RoomSnapshot['byAnimal'] = {};
     const totals = zero();
     let running = 0;
+    let sounds = 0;
+
+    const teams = Object.fromEntries(
+      TEAMS.map((t) => [
+        t,
+        { devices: 0, online: 0, sounds: 0, roundPhones: 0, roundFinished: 0, roundRunning: 0, avgDropPct: null, avgRenderMs: null, frames: 0, dropped: 0 } satisfies TeamStats,
+      ]),
+    ) as Record<Team, TeamStats>;
+    const pcts: Record<Team, number[]> = { dog: [], duck: [], cat: [] };
+    const render: Record<Team, { ms: number; commits: number }> = { dog: { ms: 0, commits: 0 }, duck: { ms: 0, commits: 0 }, cat: { ms: 0, commits: 0 } };
+    let outstanding = 0;
+
     for (const d of Object.values(this.state.devices)) {
-      const a = (byAnimal[d.animal || '?'] ??= { devices: 0, online: 0, dropped: 0, frames: 0, sounds: 0 });
-      a.devices++;
-      if (online.has(d.id)) a.online++;
-      a.sounds += d.sounds;
+      const team = teams[d.team];
+      const isOnline = online.has(d.id);
+      team.devices++;
+      if (isOnline) team.online++;
+      team.sounds += d.sounds;
+      sounds += d.sounds;
+
+      // All-time totals and per-strategy breakdown.
       const seen = new Set<string>();
       const take = (strategy: string, t: Totals | RunStats, runs: number) => {
         const s = (byStrategy[strategy] ??= { ...zero(), devices: 0 });
-        add(s, t as Totals, runs);
+        add(s, t, runs);
         if (!seen.has(strategy)) {
           s.devices++;
           seen.add(strategy);
         }
-        add(totals, t as Totals, runs);
-        a.dropped += t.dropped;
-        a.frames += t.frames;
+        add(totals, t, runs);
       };
       for (const [strategy, t] of Object.entries(d.done)) take(strategy, t, t.runs);
-      if (d.live && online.has(d.id)) {
+      const liveNow = d.live && isOnline ? d.live : null;
+      if (liveNow) {
         running++;
-        take(d.live.strategy, d.live, 0);
+        take(liveNow.strategy, liveNow, 0);
+      }
+
+      // The current round, by team.
+      if (roundId != null && participants.has(d.id)) {
+        team.roundPhones++;
+        const liveRound = liveNow?.round === roundId ? liveNow : null;
+        const run = d.roundFinal ?? liveRound;
+        if (d.roundFinal) team.roundFinished++;
+        else if (liveRound) team.roundRunning++;
+        if (!d.roundFinal && isOnline) outstanding++;
+        if (run && run.frames > 0) {
+          pcts[d.team].push((run.dropped / run.frames) * 100);
+          render[d.team].ms += run.renderMs;
+          render[d.team].commits += run.commits;
+          team.frames += run.frames;
+          team.dropped += run.dropped;
+        }
       }
     }
+
+    for (const t of TEAMS) {
+      const p = pcts[t];
+      teams[t].avgDropPct = p.length ? p.reduce((a, b) => a + b, 0) / p.length : null;
+      teams[t].avgRenderMs = render[t].commits ? render[t].ms / render[t].commits : null;
+    }
+
+    let result: RoomSnapshot['result'] = null;
+    if (roundId != null) {
+      const finishedAny = TEAMS.some((t) => teams[t].roundFinished > 0);
+      const complete = finishedAny && outstanding === 0;
+      let winner: Team | null = null;
+      if (complete) {
+        for (const t of TEAMS) {
+          const v = teams[t].avgDropPct;
+          if (v == null || teams[t].roundFinished === 0) continue;
+          if (winner == null || v < (teams[winner].avgDropPct ?? Infinity)) winner = t;
+        }
+      }
+      result = { id: roundId, complete, winner };
+    }
+
     return {
       t: 'room',
       room: this.roomName,
@@ -308,21 +392,38 @@ export class Room extends DurableObject<Env> {
       online: online.size,
       devices: Object.keys(this.state.devices).length,
       running,
-      sounds: this.soundTotal(),
+      sounds,
       totals,
       byStrategy,
-      byAnimal,
+      teams,
       dropsPerSec: this.state.dropsPerSec,
       soundsPerSec: this.state.soundsPerSec,
       round: this.state.round,
+      result,
     };
   }
 
   private csv(): Response {
-    const rows = [['device', 'animal', 'mobile', 'deviceMs', 'strategy', 'runs', 'frames', 'dropped', 'slow', 'long', 'worstMs', 'commits', 'renderMs', 'sounds']];
+    const rows = [['device', 'team', 'mobile', 'deviceMs', 'strategy', 'runs', 'frames', 'dropped', 'dropPct', 'slow', 'long', 'worstMs', 'commits', 'renderMs', 'sounds']];
     for (const d of Object.values(this.state.devices)) {
       for (const [s, t] of Object.entries(d.done)) {
-        rows.push([d.id, d.animal, String(d.mobile), String(d.deviceMs ?? ''), s, String(t.runs), String(t.frames), String(t.dropped), String(t.slow), String(t.long), t.worst.toFixed(1), String(t.commits), t.renderMs.toFixed(1), String(d.sounds)]);
+        rows.push([
+          d.id,
+          d.team,
+          String(d.mobile),
+          String(d.deviceMs ?? ''),
+          s,
+          String(t.runs),
+          String(t.frames),
+          String(t.dropped),
+          t.frames ? ((t.dropped / t.frames) * 100).toFixed(2) : '',
+          String(t.slow),
+          String(t.long),
+          t.worst.toFixed(1),
+          String(t.commits),
+          t.renderMs.toFixed(1),
+          String(d.sounds),
+        ]);
       }
     }
     return new Response(rows.map((r) => r.join(',')).join('\n'), {

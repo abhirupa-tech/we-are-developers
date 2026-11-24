@@ -9,7 +9,7 @@ import { room } from './roomClient';
  * Reads the same counters the HUD shows, so the room screen and the phone
  * always agree.
  */
-type Active = { runId: string; strategy: string; cpu: number; frames: RunFrames; collector: RunCollector; timer: number };
+type Active = { runId: string; strategy: string; cpu: number; round?: number; frames: RunFrames; collector: RunCollector; timer: number };
 let active: Active | null = null;
 
 function stats(a: Active): RunStats {
@@ -30,12 +30,13 @@ function stats(a: Active): RunStats {
     worst: Math.round(worst),
     commits: a.collector.commits,
     renderMs: Math.round(a.collector.renderDurations.reduce((s, d) => s + d, 0) * 10) / 10,
+    round: a.round,
   };
 }
 
-export function beginReport(strategy: string, cpu: number, frames: RunFrames, collector: RunCollector) {
+export function beginReport(strategy: string, cpu: number, frames: RunFrames, collector: RunCollector, round?: number) {
   endReport();
-  const a: Active = { runId: crypto.randomUUID(), strategy, cpu, frames, collector, timer: 0 };
+  const a: Active = { runId: crypto.randomUUID(), strategy, cpu, round, frames, collector, timer: 0 };
   a.timer = window.setInterval(() => room.live(stats(a)), 1000);
   active = a;
 }

@@ -2,23 +2,16 @@ import qrcode from 'qrcode-generator';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ANIMAL_EMOJI, ANIMALS, type Animal } from '../debug/dropSound';
 import { CPU_FACTORS } from '../debug/cpuThrottle';
-import { STRATEGIES } from '../strategies';
 import { RECORDINGS } from '../stream/fixtures';
 import type { RoomSnapshot, Totals } from './protocol';
 import { ROOM_ENABLED, ROOM_NAME, room } from './roomClient';
+import { Celebration } from './Celebration';
+import { TEAM_COLOR, TEAM_METHOD, TEAM_NAME } from './teams';
 import './room.css';
 
 const params = new URLSearchParams(window.location.search);
 const KEY = params.get('key') ?? '';
 const RATES = [1, 2, 5, 10];
-const STRATEGY_LABEL: Record<string, string> = { ...Object.fromEntries(STRATEGIES.map((s) => [s.id, s.label])), a2ui: 'A2UI' };
-const STRATEGY_COLOR: Record<string, string> = {
-  setState: 'var(--s-setstate)',
-  buffered: 'var(--s-transition)',
-  frameBatched: 'var(--s-frame)',
-  a2ui: 'var(--s-store)',
-};
-const ORDER = ['setState', 'buffered', 'frameBatched', 'a2ui'];
 
 async function toggleFullscreen() {
   try {
@@ -119,15 +112,16 @@ function useParticles(snapshot: RoomSnapshot | null) {
   useEffect(() => {
     if (!snapshot) return;
     const born: Particle[] = [];
-    for (const [animal, a] of Object.entries(snapshot.byAnimal)) {
-      const before = prev.current[animal];
-      prev.current[animal] = a.sounds;
+    for (const team of ANIMALS) {
+      const sounds = snapshot.teams[team]?.sounds ?? 0;
+      const before = prev.current[team];
+      prev.current[team] = sounds;
       if (before === undefined) continue;
-      const n = Math.min(2, a.sounds - before);
+      const n = Math.min(2, sounds - before);
       for (let i = 0; i < n; i++) {
         born.push({
           id: seq.current++,
-          emoji: ANIMAL_EMOJI[animal as Animal] ?? '🔊',
+          emoji: ANIMAL_EMOJI[team],
           x: 4 + Math.random() * 92,
           drift: (Math.random() - 0.5) * 120,
           size: 24 + Math.random() * 20,
@@ -145,12 +139,14 @@ function useParticles(snapshot: RoomSnapshot | null) {
 }
 
 function Presenter({ snapshot, onClose }: { snapshot: RoomSnapshot | null; onClose: () => void }) {
-  const [strategy, setStrategy] = useState(STRATEGIES[0].id as string);
   const [recording, setRecording] = useState('demo-3k');
   const [speed, setSpeed] = useState(5);
-  const [cpu, setCpu] = useState(4);
+  // 2×: big enough gaps between the methods to be reliable on fast phones too.
+  const [cpu, setCpu] = useState(2);
+  // Every phone stops at the limit, so all teams are scored on the same window.
+  const [limit, setLimit] = useState(45);
   const [confirmReset, setConfirmReset] = useState(false);
-  const live = !!snapshot?.round && snapshot.running > 0;
+  const live = (snapshot?.running ?? 0) > 0;
   return (
     <section className="rs-card rs-presenter" aria-label="Presenter controls">
       <header className="rs-card-head">
@@ -159,22 +155,14 @@ function Presenter({ snapshot, onClose }: { snapshot: RoomSnapshot | null; onClo
           ✕
         </button>
       </header>
-      <p className="rs-muted rs-presenter-note">Starts the same run on every phone in the room.</p>
-      <div className="rs-seg" role="radiogroup" aria-label="Strategy">
-        {STRATEGIES.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            role="radio"
-            aria-checked={strategy === s.id}
-            className={strategy === s.id ? 'on' : ''}
-            style={{ '--c': STRATEGY_COLOR[s.id] } as React.CSSProperties}
-            onClick={() => setStrategy(s.id)}
-          >
-            {s.label}
-          </button>
+      <p className="rs-muted rs-presenter-note">Every phone streams the same answer at once, each with its team's method.</p>
+      <ul className="rs-team-legend">
+        {ANIMALS.map((a) => (
+          <li key={a} style={{ '--c': TEAM_COLOR[a] } as React.CSSProperties}>
+            {ANIMAL_EMOJI[a]} <code>{TEAM_METHOD[a]}</code>
+          </li>
         ))}
-      </div>
+      </ul>
       <div className="rs-row">
         <label>
           Response
@@ -197,6 +185,16 @@ function Presenter({ snapshot, onClose }: { snapshot: RoomSnapshot | null; onClo
           </select>
         </label>
         <label>
+          Time limit
+          <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
+            {[30, 45, 60, 90, 0].map((l) => (
+              <option key={l} value={l}>
+                {l ? `${l} s` : 'none'}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           CPU
           <select value={cpu} onChange={(e) => setCpu(Number(e.target.value))}>
             {CPU_FACTORS.map((f) => (
@@ -208,8 +206,8 @@ function Presenter({ snapshot, onClose }: { snapshot: RoomSnapshot | null; onClo
         </label>
       </div>
       <div className="rs-actions">
-        <button type="button" className="rs-go" onClick={() => room.start({ strategy, recording, rate: speed, cpu })}>
-          ▶ Start on all devices
+        <button type="button" className="rs-go" onClick={() => room.start({ recording, rate: speed, cpu, limitMs: limit * 1000 })}>
+          ▶ Start round on all phones
         </button>
         <button type="button" className="rs-ghost" onClick={room.stop} disabled={!live}>
           ■ Stop
@@ -242,7 +240,7 @@ function Presenter({ snapshot, onClose }: { snapshot: RoomSnapshot | null; onClo
 
 /**
  * The projector view (?view=room&room=<name>[&key=<presenter key>]):
- * everyone's dropped frames, render time and animal noises, live.
+ * three teams, three rendering methods, one winner per round.
  */
 export function RoomScreen() {
   const s = useSyncExternalStore(room.subscribe, room.getSnapshot);
@@ -252,6 +250,7 @@ export function RoomScreen() {
   const snap = s.snapshot;
   const particles = useParticles(snap);
   const [controls, setControls] = useState(true);
+  const [dismissed, setDismissed] = useState<number | null>(null);
   const joinUrl = useMemo(() => (ROOM_ENABLED ? room.joinUrl() : ''), []);
   // Shown under the QR: the page and room only (the QR carries the full link).
   const shortUrl = useMemo(() => {
@@ -265,10 +264,11 @@ export function RoomScreen() {
       if ((e.target as HTMLElement).tagName === 'SELECT') return;
       if (e.key === 'c') setControls((c) => !c);
       if (e.key === 'f') void toggleFullscreen();
+      if (e.key === 'Escape' && snap?.result) setDismissed(snap.result.id);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [snap?.result]);
 
   // Flash the hero when the room is dropping lots of frames right now.
   const recentDrops = snap?.dropsPerSec.at(-1) ?? 0;
@@ -286,15 +286,17 @@ export function RoomScreen() {
   }
 
   const t = snap?.totals;
-  const strategies = ORDER.filter((id) => snap?.byStrategy[id]);
-  const rates = strategies.map((id) => rate(snap!.byStrategy[id]));
-  const maxRate = Math.max(1, ...rates.filter(Number.isFinite));
-  const best = strategies.length > 1 ? strategies[rates.indexOf(Math.min(...rates.filter(Number.isFinite)))] : null;
-  const teams = ANIMALS.map((a) => ({ a, v: snap?.byAnimal[a] ?? { devices: 0, online: 0, dropped: 0, frames: 0, sounds: 0 } }));
-  const loudest = teams.reduce((m, x) => (x.v.sounds > m.v.sounds ? x : m), teams[0]);
-  const maxSounds = Math.max(1, ...teams.map((x) => x.v.sounds));
   const round = snap?.round;
-  const running = (snap?.running ?? 0) > 0;
+  const result = snap?.result;
+  const teams = ANIMALS.map((a) => ({ a, v: snap?.teams[a] }));
+  const roundPhones = teams.reduce((n, x) => n + (x.v?.roundPhones ?? 0), 0);
+  const roundFinished = teams.reduce((n, x) => n + (x.v?.roundFinished ?? 0), 0);
+  const pcts = teams.map((x) => x.v?.avgDropPct ?? NaN);
+  const maxPct = Math.max(1, ...pcts.filter(Number.isFinite));
+  const leader = result?.complete ? result.winner : null;
+  const loudest = teams.reduce((m, x) => ((x.v?.sounds ?? 0) > (m.v?.sounds ?? 0) ? x : m), teams[0]);
+  const maxSounds = Math.max(1, ...teams.map((x) => x.v?.sounds ?? 0));
+  const celebrate = !!(result?.complete && result.winner && dismissed !== result.id);
 
   return (
     <div className="rs">
@@ -314,16 +316,22 @@ export function RoomScreen() {
           <span className="rs-logo">◐</span> MockGPT <span className="rs-live">Live</span>
           <span className="rs-room">#{ROOM_NAME}</span>
         </div>
-        <div className={`rs-round ${running ? 'is-running' : ''}`}>
+        <div className={`rs-round ${round && !result?.complete ? 'is-running' : ''}`}>
           {round ? (
-            <>
-              <i />
-              {running ? 'Running' : 'Last round'}:{' '}
-              <b style={{ color: STRATEGY_COLOR[round.strategy] }}>{STRATEGY_LABEL[round.strategy] ?? round.strategy}</b>
-              <span className="rs-muted">
-                · {round.cpu}× CPU · {round.rate}× speed
-              </span>
-            </>
+            result?.complete ? (
+              <>
+                <i className="is-done" /> Round complete · <b>{roundFinished}</b> phones
+              </>
+            ) : (
+              <>
+                <i /> Round running · <b>{roundFinished}</b>
+                <span className="rs-muted">/ {roundPhones} phones finished</span>
+                {round.limitMs > 0 && !round.stopped && snap && (
+                  <span className="rs-countdown">{Math.max(0, Math.ceil((round.limitMs - (snap.now - round.startedAt)) / 1000))} s left</span>
+                )}
+                {round.stopped && <span className="rs-countdown">time's up · wrapping up</span>}
+              </>
+            )
           ) : (
             <span className="rs-muted">Waiting for the first round</span>
           )}
@@ -334,7 +342,7 @@ export function RoomScreen() {
             <b>
               <Counter value={snap?.online ?? 0} />
             </b>{' '}
-            {s.connected ? 'devices online' : 'connecting…'}
+            {s.connected ? 'phones online' : 'connecting…'}
           </div>
           {s.presenter && (
             <button
@@ -384,7 +392,7 @@ export function RoomScreen() {
                   <b>
                     <Counter value={snap?.devices ?? 0} />
                   </b>{' '}
-                  devices
+                  phones
                 </span>
               </div>
             </div>
@@ -432,68 +440,85 @@ export function RoomScreen() {
           <div>
             <p className="rs-kicker">Scan to join</p>
             <p className="rs-url">{shortUrl}</p>
-            <p className="rs-muted">Your phone gets a random animal. It makes noise every time it drops a frame.</p>
+            <p className="rs-muted">You'll land on a random team. Your phone makes its animal's noise every time it drops a frame.</p>
           </div>
         </section>
 
         <section className="rs-card rs-race">
           <header className="rs-card-head">
-            <h2>Strategy showdown</h2>
-            <span className="rs-muted">drop rate · lower is better</span>
+            <h2>Round showdown</h2>
+            <span className="rs-muted">average drop rate per phone · lower wins</span>
           </header>
-          {strategies.length === 0 && <p className="rs-muted rs-pad">Results appear here as phones finish their runs.</p>}
-          {strategies.map((id, i) => {
-            const v = snap!.byStrategy[id];
-            const r = rates[i];
-            return (
-              <div key={id} className="rs-lane" style={{ '--c': STRATEGY_COLOR[id] ?? 'var(--muted)' } as React.CSSProperties}>
-                <div className="rs-lane-name">
-                  <code>{STRATEGY_LABEL[id] ?? id}</code>
-                  {best === id && <span className="rs-trophy">🏆 smoothest</span>}
+          {!round && <p className="rs-muted rs-pad">Start a round: each team streams the same answer with its own method.</p>}
+          {round &&
+            teams.map(({ a, v }, i) => {
+              const pct = pcts[i];
+              return (
+                <div
+                  key={a}
+                  className={`rs-lane ${leader === a ? 'is-winner' : ''}`}
+                  style={{ '--c': TEAM_COLOR[a] } as React.CSSProperties}
+                >
+                  <div className="rs-lane-name">
+                    <span className="rs-lane-team">
+                      {ANIMAL_EMOJI[a]} {TEAM_NAME[a]}
+                    </span>
+                    <code>{TEAM_METHOD[a]}</code>
+                    {leader === a && <span className="rs-trophy">🏆 winner</span>}
+                  </div>
+                  <div className="rs-bar">
+                    <span style={{ width: `${Number.isFinite(pct) ? Math.max(2, (pct / maxPct) * 100) : 0}%` }} />
+                  </div>
+                  <div className="rs-lane-num">
+                    <b>
+                      {Number.isFinite(pct) ? (
+                        <>
+                          <Counter value={pct} digits={1} />%
+                        </>
+                      ) : (
+                        '–'
+                      )}
+                    </b>
+                    <span>
+                      {v?.roundFinished ?? 0}/{v?.roundPhones ?? 0} done ·{' '}
+                      {v?.avgRenderMs != null ? `${fmt(v.avgRenderMs, 1)} ms render` : '– ms render'}
+                    </span>
+                  </div>
                 </div>
-                <div className="rs-bar">
-                  <span style={{ width: `${Number.isFinite(r) ? Math.max(2, (r / maxRate) * 100) : 0}%` }} />
-                </div>
-                <div className="rs-lane-num">
-                  <b>
-                    <Counter value={r} digits={1} />%
-                  </b>
-                  <span>
-                    <Counter value={avgRender(v)} digits={1} /> ms avg render · {fmt(v.devices)} devices · {fmt(v.runs)} runs
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </section>
 
         <section className="rs-card rs-teams">
           <header className="rs-card-head">
-            <h2>Team noise</h2>
-            <span className="rs-muted">who dropped the most frames?</span>
+            <h2>Teams</h2>
+            <span className="rs-muted">noise = dropped frames, out loud</span>
           </header>
           {teams.map(({ a, v }) => (
-            <div key={a} className={`rs-team ${loudest.a === a && v.sounds > 0 ? 'is-loudest' : ''}`}>
+            <div key={a} className={`rs-team ${loudest.a === a && (v?.sounds ?? 0) > 0 ? 'is-loudest' : ''}`}>
               <span className="rs-team-emoji">{ANIMAL_EMOJI[a]}</span>
               <div className="rs-team-body">
                 <div className="rs-team-line">
-                  <b>{a[0].toUpperCase() + a.slice(1)}s</b>
+                  <b>{TEAM_NAME[a]}</b>
                   <span className="rs-muted">
-                    {fmt(v.online)} online · {fmt(v.dropped)} dropped
+                    {fmt(v?.online ?? 0)} online · {fmt(v?.devices ?? 0)} joined
                   </span>
                 </div>
                 <div className="rs-bar rs-bar-team">
-                  <span style={{ width: `${(v.sounds / maxSounds) * 100}%` }} />
+                  <span style={{ width: `${((v?.sounds ?? 0) / maxSounds) * 100}%` }} />
                 </div>
               </div>
               <span className="rs-team-num">
-                <Counter value={v.sounds} />
-                {loudest.a === a && v.sounds > 0 && <span className="rs-crown">👑</span>}
+                <Counter value={v?.sounds ?? 0} />
+                {loudest.a === a && (v?.sounds ?? 0) > 0 && <span className="rs-crown">📣</span>}
               </span>
             </div>
           ))}
         </section>
       </main>
+      {celebrate && snap && result?.winner && (
+        <Celebration snapshot={snap} winner={result.winner as Animal} onClose={() => setDismissed(result.id)} />
+      )}
       {s.error && <p className="rs-error">{s.error}</p>}
     </div>
   );

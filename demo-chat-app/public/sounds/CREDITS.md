@@ -8,5 +8,5 @@ the [Pixabay Content License](https://pixabay.com/service/license-summary/)
 | --- | --- | --- |
 | `dog.mp3` | Friendly small dog bark 1 (535470) | yodguard |
 | `cat.mp3` | Cat meow 8 FX (306184) | sound_garage |
-| `rooster.mp3` | Rooster crowing (364473) | dragon-studio |
 | `duck.mp3` | Duck quack (40345) | freesound_community |
+

@@ -3,20 +3,39 @@ import { currentRun, onFrame } from '../metrics/monitor';
 /**
  * Drop sound: a cartoony animal noise for every dropped frame during a run.
  *
- * Every page load picks one animal at random: dog, cat, rooster or duck. A
- * refresh rolls again. Nobody chooses it.
+ * Every page load picks one animal at random: dog, cat or duck. A refresh
+ * rolls again. Nobody chooses it. In a live room the server assigns it
+ * instead (balanced teams), through setAnimal().
  *
  * The clips live in public/sounds (credits in CREDITS.md there). Each is
  * fetched and decoded once into an AudioBuffer, so playing it is instant.
  * Browsers only allow audio after a user gesture: the Audio button is one;
  * with ?audio=1 the sound starts on the first click or key press.
  */
-export type Animal = 'dog' | 'cat' | 'rooster' | 'duck';
+export type Animal = 'dog' | 'cat' | 'duck';
 
-export const ANIMALS: Animal[] = ['dog', 'cat', 'rooster', 'duck'];
-export const ANIMAL_EMOJI: Record<Animal, string> = { dog: '🐶', cat: '🐱', rooster: '🐓', duck: '🦆' };
+export const ANIMALS: Animal[] = ['dog', 'duck', 'cat'];
+export const ANIMAL_EMOJI: Record<Animal, string> = { dog: '🐶', cat: '🐱', duck: '🦆' };
 
-export const animal: Animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+let animal: Animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+const animalListeners = new Set<() => void>();
+
+export const getAnimal = () => animal;
+export function subscribeAnimal(listener: () => void) {
+  animalListeners.add(listener);
+  return () => {
+    animalListeners.delete(listener);
+  };
+}
+/** Switch this page's animal (the live room assigns teams). Reloads the clip. */
+export function setAnimal(next: Animal) {
+  if (next === animal || !ANIMALS.includes(next)) return;
+  animal = next;
+  clip = null;
+  loading = null;
+  if (ctx) void load(ctx);
+  animalListeners.forEach((l) => l());
+}
 
 let enabled = new URLSearchParams(window.location.search).get('audio') === '1';
 let ctx: AudioContext | null = null;
