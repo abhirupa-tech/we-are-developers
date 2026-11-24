@@ -48,7 +48,7 @@ const tint = (rgb: string): Keyframe[] => [
   { boxShadow: `inset 0 0 0 100vmax rgb(${rgb} / 0.22), 0 0 0 2px rgb(${rgb} / 0.9)` },
   { boxShadow: `inset 0 0 0 100vmax rgb(${rgb} / 0), 0 0 0 2px rgb(${rgb} / 0)` },
 ];
-const TINT_OK = tint('43 228 255');
+const TINT_OK = tint('246 231 217'); // warm cream: painted on time
 const TINT_DROPPED = tint('255 140 26');
 const LABEL: Keyframe[] = [{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }];
 const TIMING: KeyframeAnimationOptions = { duration: 700, easing: 'ease-out' };

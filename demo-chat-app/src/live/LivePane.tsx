@@ -43,7 +43,7 @@ const SUGGESTIONS: Record<LiveKind, { title: string; prompt: string }[]> = {
 function Avatar() {
   return (
     <div
-      className="grid size-8 shrink-0 place-items-center rounded-full bg-[conic-gradient(from_200deg,var(--s-store),var(--s-transition),var(--s-store))] text-[15px] text-bg shadow-[0_0_18px_rgb(43_228_255/0.25)]"
+      className="grid size-8 shrink-0 place-items-center rounded-full bg-[conic-gradient(from_200deg,var(--s-store),var(--s-transition),var(--s-store))] text-[15px] text-bg shadow-[0_0_18px_rgb(245_185_66/0.25)]"
       aria-hidden="true"
     >
       ◐

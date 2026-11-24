@@ -67,7 +67,7 @@ function QrCode({ text }: { text: string }) {
   return (
     <svg className="rs-qr" viewBox={`-2 -2 ${path.n + 4} ${path.n + 4}`} role="img" aria-label={`QR code: ${text}`}>
       <rect x={-2} y={-2} width={path.n + 4} height={path.n + 4} fill="#fff" rx={2} />
-      <path d={path.d} fill="#0b1020" />
+      <path d={path.d} fill="#0f0619" />
     </svg>
   );
 }

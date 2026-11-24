@@ -3,7 +3,7 @@ import { ANIMAL_EMOJI, ANIMALS, type Animal } from '../debug/dropSound';
 import type { RoomSnapshot } from './protocol';
 import { TEAM_COLOR, TEAM_METHOD, TEAM_NAME } from './teams';
 
-const COLORS = ['#2be4ff', '#b6f36a', '#ffc24b', '#ff5a4e', '#9b8cff', '#ff8ad8', '#ffffff'];
+const COLORS = ['#f5b942', '#f0a35e', '#f6e7d9', '#ff5a4e', '#9b8cff', '#b6f36a', '#ffd98a'];
 const MEDALS = ['🥇', '🥈', '🥉'];
 
 /** Seeded so a re-render doesn't reshuffle the confetti mid-fall. */
