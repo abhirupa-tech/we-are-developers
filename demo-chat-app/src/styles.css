@@ -1112,6 +1112,11 @@ html.jank-flash body::after {
 }
 
 /* ── Scorecard ───────────────────────────────────────────────────────── */
+/* Phone only: blurs and darkens the page behind the scorecard. */
+.sc-backdrop {
+  display: none;
+}
+
 .scorecard {
   position: absolute;
   right: 20px;
@@ -1544,7 +1549,7 @@ html.presenter .badge {
     max-height: none;
     overflow: hidden;
     gap: 0;
-    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
     border-bottom: 0;
     border-top: 1px solid var(--line);
     box-shadow: 0 -8px 24px rgb(0 0 0 / 0.35);
@@ -1562,7 +1567,7 @@ html.presenter .badge {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas: 'head strip' 'tiles tiles';
     align-items: center;
-    gap: 6px 10px;
+    gap: 10px 12px;
   }
   .hud-frames .hud-head {
     grid-area: head;
@@ -1577,7 +1582,7 @@ html.presenter .badge {
     grid-area: strip;
   }
   .hud-frames .hud-strip .canvas-wrap {
-    height: 34px;
+    height: 64px;
   }
   .hud-frames .tiles {
     grid-area: tiles;
@@ -1588,20 +1593,53 @@ html.presenter .badge {
     grid-column: auto;
   }
   .hud-frames .tile {
-    padding: 6px 10px;
+    padding: 12px 9px;
   }
   .hud-frames .tile-label {
     font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .hud-frames .tile-value,
   .hud-frames .tile-wide .tile-value,
   html.presenter .hud-frames .tile-value,
   html.presenter .hud-frames .tile-wide .tile-value {
-    font-size: 24px;
+    font-size: 32px;
   }
   .hud-fps,
   html.presenter .hud-fps {
-    font-size: 22px;
+    font-size: 28px;
+  }
+
+  /* Run complete: card centred over a blurred, darkened page. */
+  .sc-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+    background: rgb(5 8 18 / 0.6);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    animation: sc-fade 0.25s ease-out;
+  }
+  .scorecard {
+    position: fixed;
+    z-index: 50;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 48px);
+    padding: 14px 14px;
+    background: var(--panel);
+    animation: none;
+  }
+
+  .scorecard .btn {
+    white-space: nowrap;
   }
 
   /* Transcript. */
@@ -1656,5 +1694,11 @@ html.presenter .badge {
   }
   .ask {
     flex: 1 1 100%;
+  }
+}
+
+@keyframes sc-fade {
+  from {
+    opacity: 0;
   }
 }
