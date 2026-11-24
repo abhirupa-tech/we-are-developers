@@ -533,6 +533,7 @@ export function App() {
             );
           })}
         </div>
+        {result && <div className="sc-backdrop" onClick={() => setResult(null)} aria-hidden="true" />}
         {result && <Scorecard result={result} onClose={() => setResult(null)} />}
       </main>
 
