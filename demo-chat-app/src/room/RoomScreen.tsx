@@ -73,14 +73,13 @@ function QrCode({ text }: { text: string }) {
 }
 
 /** Area chart of a per-second series, newest on the right. */
-function Sparkline({ drops, sounds }: { drops: number[]; sounds: number[] }) {
+function Sparkline({ drops }: { drops: number[] }) {
   const W = 600;
   const H = 140;
   const N = 90;
   const pad = (a: number[]) => [...Array(Math.max(0, N - a.length)).fill(0), ...a.slice(-N)];
   const d = pad(drops);
-  const s = pad(sounds);
-  const max = Math.max(10, ...d, ...s);
+  const max = Math.max(10, ...d);
   const x = (i: number) => (i / (N - 1)) * W;
   const y = (v: number) => H - (v / max) * (H - 8) - 2;
   const line = (a: number[]) => a.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
@@ -97,7 +96,6 @@ function Sparkline({ drops, sounds }: { drops: number[]; sounds: number[] }) {
       ))}
       <path d={`${line(d)}L${W},${H}L0,${H}Z`} fill="url(#rs-drop-fill)" />
       <path d={line(d)} className="rs-line-drop" />
-      <path d={line(s)} className="rs-line-sound" />
     </svg>
   );
 }
@@ -328,9 +326,16 @@ export function RoomScreen() {
   const pcts = teams.map((x) => x.v?.avgDropPct ?? NaN);
   const maxPct = Math.max(1, ...pcts.filter(Number.isFinite));
   const leader = result?.complete ? result.winner : null;
-  const loudest = teams.reduce((m, x) => ((x.v?.sounds ?? 0) > (m.v?.sounds ?? 0) ? x : m), teams[0]);
-  const maxSounds = Math.max(1, ...teams.map((x) => x.v?.sounds ?? 0));
   const celebrate = !!(result?.complete && result.winner && dismissed !== result.id);
+
+  // Room pulse: this round's best vs worst team, and room-wide counts.
+  const ranked = teams.filter((x) => x.v?.avgDropPct != null).sort((x, y) => (x.v!.avgDropPct ?? 0) - (y.v!.avgDropPct ?? 0));
+  const best = ranked[0];
+  const worst = ranked.at(-1);
+  const gap =
+    best && worst && best !== worst && (worst.v!.avgDropPct ?? 0) > 0
+      ? (worst.v!.avgDropPct ?? 0) / Math.max(best.v!.avgDropPct ?? 0, 0.1)
+      : NaN;
 
   return (
     <div className="rs">
@@ -402,7 +407,8 @@ export function RoomScreen() {
       {s.presenter && controls && <Presenter snapshot={snap} onClose={() => setControls(false)} />}
 
       <main className="rs-grid">
-        <section className={`rs-card rs-hero ${hot ? 'is-hot' : ''}`}>
+<div className="rs-col rs-col-main">
+<section className={`rs-card rs-hero ${hot ? 'is-hot' : ''}`}>
           <div className="rs-hero-top">
             <div className="rs-hero-main">
               <p className="rs-kicker">Frames dropped across the room</p>
@@ -451,10 +457,10 @@ export function RoomScreen() {
                   <small>ms</small>
                 </b>
               </div>
-              <div className="rs-tile rs-tile-noise">
-                <span>Animal noises</span>
+              <div className="rs-tile rs-tile-bad">
+                <span>Long frames &gt; 50 ms</span>
                 <b>
-                  <Counter value={snap?.sounds ?? 0} />
+                  <Counter value={t?.long ?? 0} />
                 </b>
               </div>
             </div>
@@ -462,23 +468,12 @@ export function RoomScreen() {
           <div className="rs-chart">
             <div className="rs-chart-legend">
               <span className="rs-leg-drop">dropped frames / s</span>
-              <span className="rs-leg-sound">animal noises / s</span>
               <span className="rs-muted">last 90 s</span>
             </div>
-            <Sparkline drops={snap?.dropsPerSec ?? []} sounds={snap?.soundsPerSec ?? []} />
+            <Sparkline drops={snap?.dropsPerSec ?? []} />
           </div>
         </section>
-
-        <section className="rs-card rs-join">
-          <QrCode text={joinUrl} />
-          <div>
-            <p className="rs-kicker">Scan to join</p>
-            <p className="rs-url">{shortUrl}</p>
-            <p className="rs-muted">You'll land on a random team. Your phone makes its animal's noise every time it drops a frame.</p>
-          </div>
-        </section>
-
-        <section className="rs-card rs-race">
+<section className="rs-card rs-race">
           <header className="rs-card-head">
             <h2>Round showdown</h2>
             <span className="rs-muted">average drop rate per phone · lower wins</span>
@@ -522,34 +517,76 @@ export function RoomScreen() {
               );
             })}
         </section>
-
-        <section className="rs-card rs-teams">
+</div>
+<div className="rs-col rs-col-side">
+<section className="rs-card rs-join">
+          <QrCode text={joinUrl} />
+          <div>
+            <p className="rs-kicker">Scan to join</p>
+            <p className="rs-url">{shortUrl}</p>
+            <p className="rs-muted">You'll land on a random team. Your phone makes its animal's noise every time it drops a frame.</p>
+          </div>
+        </section>
+<section className="rs-card rs-pulse">
+          <header className="rs-card-head">
+            <h2>Room pulse</h2>
+            <span className="rs-muted">live, every phone</span>
+          </header>
+          <div className="rs-pulse-grid">
+            <div className="rs-pulse-stat">
+              <span>Streaming now</span>
+              <b>
+                <Counter value={snap?.running ?? 0} />
+                <small>/ {fmt(snap?.online ?? 0)} phones</small>
+              </b>
+            </div>
+            <div className="rs-pulse-stat">
+              <span>Finished this round</span>
+              <b>
+                <Counter value={roundFinished} />
+                <small>/ {fmt(roundPhones)} phones</small>
+              </b>
+            </div>
+            <div className="rs-pulse-stat">
+              <span>Renders committed</span>
+              <b>
+                <Counter value={t?.commits ?? 0} />
+              </b>
+            </div>
+            <div className="rs-pulse-stat" style={{ '--c': best ? TEAM_COLOR[best.a] : 'var(--gold)' } as React.CSSProperties}>
+              <span>{best ? `${ANIMAL_EMOJI[best.a]} vs ${ANIMAL_EMOJI[worst!.a]} this round` : 'Best vs worst team'}</span>
+              <b className="is-team">
+                {Number.isFinite(gap) ? (
+                  <>
+                    <Counter value={gap} digits={1} />×<small>fewer drops</small>
+                  </>
+                ) : (
+                  '–'
+                )}
+              </b>
+            </div>
+          </div>
+        </section>
+<section className="rs-card rs-teams">
           <header className="rs-card-head">
             <h2>Teams</h2>
-            <span className="rs-muted">noise = dropped frames, out loud</span>
+            <span className="rs-muted">phones online</span>
           </header>
           {teams.map(({ a, v }) => (
-            <div key={a} className={`rs-team ${loudest.a === a && (v?.sounds ?? 0) > 0 ? 'is-loudest' : ''}`}>
+            <div key={a} className="rs-team" style={{ '--c': TEAM_COLOR[a] } as React.CSSProperties}>
               <span className="rs-team-emoji">{ANIMAL_EMOJI[a]}</span>
               <div className="rs-team-body">
-                <div className="rs-team-line">
-                  <b>{TEAM_NAME[a]}</b>
-                  <span className="rs-muted">
-                    {fmt(v?.online ?? 0)} online · {fmt(v?.devices ?? 0)} joined
-                  </span>
-                </div>
-                <div className="rs-bar rs-bar-team">
-                  <span style={{ width: `${((v?.sounds ?? 0) / maxSounds) * 100}%` }} />
-                </div>
+                <b>{TEAM_NAME[a]}</b>
+                <code>{TEAM_METHOD[a]}</code>
               </div>
               <span className="rs-team-num">
-                <Counter value={v?.sounds ?? 0} />
-                {loudest.a === a && (v?.sounds ?? 0) > 0 && <span className="rs-crown">📣</span>}
+                <Counter value={v?.online ?? 0} />
               </span>
             </div>
           ))}
         </section>
-      </main>
+</div>
+</main>
       {celebrate && snap && result?.winner && (
         <Celebration snapshot={snap} winner={result.winner as Animal} onClose={() => setDismissed(result.id)} />
       )}
