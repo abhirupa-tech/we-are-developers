@@ -721,10 +721,11 @@
 
 .rs-particles span {
   position: absolute;
-  bottom: -80px;
+  top: -100px;
   line-height: 1;
   opacity: 0;
-  animation: rs-rise 4s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  /* Dropped frames, literally: animals fall from the top. */
+  animation: rs-drop 4s cubic-bezier(0.45, 0, 0.8, 0.6) forwards;
   filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.4));
 }
 
@@ -757,20 +758,20 @@
   color: var(--s-store);
 }
 
-@keyframes rs-rise {
+@keyframes rs-drop {
   0% {
     opacity: 0;
-    transform: translate(0, 0) scale(0.6) rotate(0deg);
+    transform: translate(0, 0) rotate(0deg);
   }
-  12% {
+  8% {
     opacity: 1;
   }
-  80% {
-    opacity: 0.9;
+  85% {
+    opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translate(var(--drift), -105vh) scale(1.1) rotate(18deg);
+    transform: translate(var(--drift), calc(100vh + 160px)) rotate(var(--spin, 200deg));
   }
 }
 
