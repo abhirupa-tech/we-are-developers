@@ -67,7 +67,7 @@ export function RoomChip() {
   return (
     <span className={`room-chip ${s.connected ? 'is-live' : ''}`} title={s.connected ? `Connected to room ${ROOM_NAME}` : 'Reconnecting…'}>
       <i aria-hidden="true" />
-      {s.team ? `Team ${TEAM_NAME[s.team]}` : ROOM_NAME}
+      <span className="room-chip-label">{s.team ? `Team ${TEAM_NAME[s.team]}` : ROOM_NAME}</span>
       <b>{s.connected ? `${online} in` : '…'}</b>
     </span>
   );

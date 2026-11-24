@@ -3,7 +3,7 @@
 // Usage: node scripts/audience.mjs <ws-base> <room> <phones> <seconds>
 // e.g.   node scripts/audience.mjs wss://mockgpt-room.mockgpt-live.workers.dev rehearsal 50 600
 const [BASE, ROOM, N, SECS] = [process.argv[2], process.argv[3], Number(process.argv[4] ?? 50), Number(process.argv[5] ?? 600)];
-const STRATEGY = { dog: 'setState', duck: 'memo', cat: 'frameBatched' };
+const STRATEGY = { dog: 'frameBatched', duck: 'memo', cat: 'setState' };
 const DROP = { setState: 0.34, memo: 0.14, frameBatched: 0.03 }; // rough drop rates per method
 const MS = { setState: 9, memo: 4, frameBatched: 5 };
 const COMMITS = { setState: 120, memo: 120, frameBatched: 50 };

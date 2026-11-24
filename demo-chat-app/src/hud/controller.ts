@@ -32,8 +32,8 @@ export type HudElements = {
 const STRIP_BAR = 3; // px per frame
 const LAG_FULL = 150; // tokens at which the gauge reads full
 const CLASS_COLOR: Record<FrameClass, string> = {
-  smooth: '#3d2a5c',
-  slow: '#9a86c4',
+  smooth: '#2c2535',
+  slow: '#8a7fa0',
   dropped: '#f0a35e',
   long: '#ff4d6d',
 };
