@@ -196,31 +196,32 @@ button {
   color: var(--muted);
 }
 
-.segmented button.on {
+.segmented button.on,
+.segmented.is-locked > .on {
   color: var(--bg);
   font-weight: 600;
 }
 
-.segmented button[data-strategy='setState'].on {
+.segmented [data-strategy='setState'].on {
   background: var(--s-setstate);
 }
-.segmented button[data-strategy='memo'].on,
-.segmented button[data-strategy='transition'].on {
+.segmented [data-strategy='memo'].on,
+.segmented [data-strategy='transition'].on {
   background: var(--s-transition);
 }
-.segmented button[data-strategy='syncStore'].on {
+.segmented [data-strategy='syncStore'].on {
   background: var(--s-store);
 }
-.segmented button[data-strategy='frameBatched'].on {
+.segmented [data-strategy='frameBatched'].on {
   background: var(--s-frame);
 }
 
 /* A2UI: a mode, not a fourth strategy, so it sits after a divider. */
-.segmented button[data-strategy='a2ui'] {
+.segmented [data-strategy='a2ui'] {
   margin-left: 4px;
   position: relative;
 }
-.segmented button[data-strategy='a2ui']::before {
+.segmented [data-strategy='a2ui']::before {
   content: '';
   position: absolute;
   left: -3px;
@@ -229,7 +230,7 @@ button {
   width: 1px;
   background: var(--line);
 }
-.segmented button[data-strategy='a2ui'].on {
+.segmented [data-strategy='a2ui'].on {
   background: linear-gradient(120deg, var(--s-store), var(--s-transition));
 }
 
@@ -1934,4 +1935,15 @@ html.presenter .badge {
   border-radius: 50%;
   background: var(--ok);
   animation: join-pulse 1.4s ease-in-out infinite;
+}
+
+/* Live room: the team's method, read-only. */
+.segmented.is-locked > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9px;
+  white-space: nowrap;
+  cursor: default;
 }

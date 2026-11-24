@@ -4,7 +4,7 @@ import { A2UI_SYSTEM_PROMPT } from './a2ui/prompt';
 import { Pane, type PaneStatus } from './chat/Pane';
 import { Probe } from './chat/Probe';
 import { AskBar } from './chat/AskBar';
-import { BUILD, FLAGS, GEMINI, IS_PHONE, PROFILER_ACTIVE, REACT_VERSION } from './config';
+import { BUILD, FLAGS, GEMINI, PROFILER_ACTIVE, REACT_VERSION } from './config';
 import { CPU_FACTORS, setCpuFactor } from './debug/cpuThrottle';
 import type { Round } from './room/protocol';
 import { JoinRoom, RoomChip, TeamCard } from './room/JoinRoom';
@@ -66,10 +66,12 @@ function isTyping(target: EventTarget | null) {
 
 export function App() {
   const [strategy, setStrategy] = useState<StrategyId>(() => STRATEGIES.find((s) => s.id === FLAGS.strategy)?.id ?? 'setState');
-  const [compare, setCompare] = useState(FLAGS.compare);
+  /** In a live room the team decides the method: no switching modes. */
+  const locked = ROOM_ENABLED;
+  const [compare, setCompare] = useState(FLAGS.compare && !ROOM_ENABLED);
   const [presenter, setPresenter] = useState(FLAGS.presenter);
   /** Live modes: a real Gemini chat in one useSyncExternalStore pane, plain or with A2UI. */
-  const [live, setLive] = useState<LiveKind | false>(FLAGS.compare ? false : FLAGS.a2ui ? 'a2ui' : FLAGS.live ? 'chat' : false);
+  const [live, setLive] = useState<LiveKind | false>(FLAGS.compare || ROOM_ENABLED ? false : FLAGS.a2ui ? 'a2ui' : FLAGS.live ? 'chat' : false);
   /** The strategy panes' feed. Always a recording: the Gemini feed is hidden in the UI. */
   const [feed, setFeed] = useState<Feed>('recorded');
   const flashOn = useSyncExternalStore(renderFlash.subscribe, renderFlash.getSnapshot);
@@ -320,6 +322,7 @@ export function App() {
   /** Switching strategy (or mode) unmounts the old one and resets the run, keeping ghosts. */
   const switchTo = useCallback(
     (next: StrategyId) => {
+      if (locked) return;
       if (next === strategy && !live) return;
       reset();
       setLive(false);
@@ -329,6 +332,7 @@ export function App() {
   );
 
   const toggleCompare = useCallback(() => {
+    if (locked) return;
     reset();
     setLive(false);
     setCompare((c) => !c);
@@ -336,6 +340,7 @@ export function App() {
 
   const toggleLive = useCallback(
     (kind: LiveKind) => {
+      if (locked) return;
       reset();
       setCompare(false);
       setLive((l) => (l === kind ? false : kind));
@@ -405,6 +410,8 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
       const k = e.key.toLowerCase();
+      // In a room only the display toggles work; the presenter runs everything else.
+      if (locked && !['f', 'a', 'p', 'g', '?', 'escape'].includes(k)) return;
       if (k === '1' || k === '2' || k === '3') switchTo(STRATEGIES[Number(k) - 1].id);
       else if (k === '4') toggleLive('a2ui');
       else if (k === 'f') renderFlash.toggle();
@@ -464,6 +471,13 @@ export function App() {
           )}
         </div>
 
+        {locked ? (
+          <div className="segmented is-locked" aria-label="Your team's rendering method">
+            <span className="on" data-strategy={strategy} title="Set by your team. The presenter runs every round.">
+              🔒 <code>{strategyById[strategy].label}</code>
+            </span>
+          </div>
+        ) : (
         <div className="segmented" role="radiogroup" aria-label="Mode">
           {STRATEGIES.map((s, i) => (
             <button
@@ -492,6 +506,7 @@ export function App() {
             <code>A2UI</code>
           </button>
         </div>
+        )}
 
         <button
           type="button"
@@ -506,6 +521,8 @@ export function App() {
 
         <div id="top-actions" className={`top-actions ${menuOpen ? 'is-open' : ''}`}>
           {/* Phone menu only: the replay choices that live in the footer on desktop. */}
+          {!locked && (
+          <>
           <label className="menu-field">
             <span>Response</span>
             <select value={recordingId} onChange={(e) => setRecordingId(e.target.value)} disabled={running}>
@@ -529,6 +546,8 @@ export function App() {
           <button type="button" className={`chip ${compare ? 'on' : ''}`} onClick={toggleCompare} aria-pressed={compare}>
             Compare
           </button>
+          </>
+          )}
           <button
             type="button"
             className={`chip ${flashOn ? 'on' : ''}`}
@@ -547,6 +566,7 @@ export function App() {
           >
             {audioOn ? '🔊' : '🔇'} Audio
           </button>
+          {!locked && (
           <label className="chip cpu-select" title="Simulated CPU throttle: each commit also blocks the main thread for (N - 1) times its render time">
             CPU
             <select value={cpu} onChange={(e) => setCpu(Number(e.target.value))} disabled={running} aria-label="Simulated CPU throttle">
@@ -557,12 +577,15 @@ export function App() {
               ))}
             </select>
           </label>
+          )}
           <button type="button" className={`chip ${presenter ? 'on' : ''}`} onClick={() => setPresenter((p) => !p)} aria-pressed={presenter}>
             Presenter
           </button>
-          <button type="button" className="icon-btn" onClick={() => setSettingsOpen((o) => !o)} aria-label="Settings" aria-expanded={settingsOpen}>
-            ⚙
-          </button>
+          {!locked && (
+            <button type="button" className="icon-btn" onClick={() => setSettingsOpen((o) => !o)} aria-label="Settings" aria-expanded={settingsOpen}>
+              ⚙
+            </button>
+          )}
           <button type="button" className="icon-btn" onClick={() => setHelpOpen(true)} aria-label="Keyboard shortcuts">
             ?
           </button>
@@ -641,7 +664,7 @@ export function App() {
             <ModelPicker disabled={running} />
           </>
         )}
-        <label className="field" hidden={feed !== 'recorded'}>
+        <label className="field" hidden={feed !== 'recorded' || locked}>
           <span className="sr-only">Recording</span>
           <select value={recordingId} onChange={(e) => setRecordingId(e.target.value)} disabled={running}>
             {recordings.map((r) => (
@@ -651,7 +674,7 @@ export function App() {
             ))}
           </select>
         </label>
-        <label className="field" hidden={feed !== 'recorded'}>
+        <label className="field" hidden={feed !== 'recorded' || locked}>
           <span className="sr-only">Replay speed</span>
           <select value={rate} onChange={(e) => setRate(Number(e.target.value))} disabled={running}>
             {RATES.map((r) => (
@@ -670,7 +693,7 @@ export function App() {
           <button type="button" className="btn btn-stop" onClick={stop}>
             Stop
           </button>
-        ) : ROOM_ENABLED && IS_PHONE ? (
+        ) : locked ? (
           // In a live room the presenter starts every phone's run.
           <span className="room-wait">
             <i /> Waiting for the presenter to start the round
