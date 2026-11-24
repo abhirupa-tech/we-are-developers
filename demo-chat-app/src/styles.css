@@ -1,10 +1,10 @@
 /* MockGPT: a lab instrument on a darkened stage. The chat is calm, the HUD is loud. */
 :root {
   /* Slide palette: purple-black stage, warm cream type, gold and peach accents. */
-  --bg: #0f0619;
-  --panel: #170b29;
-  --panel-2: #201138;
-  --line: #3a2552;
+  --bg: #0c0910;
+  --panel: #141019;
+  --panel-2: #1b1622;
+  --line: #2d2635;
   --text: #f6e7d9;
   --muted: #b3a0aa;
   /* Team colours: unchanged (dogs, ducks, cats). */
@@ -40,7 +40,7 @@ body,
 body {
   margin: 0;
   /* The slides' soft violet glow in the middle of a near-black stage. */
-  background: radial-gradient(1400px 900px at 55% 45%, #240c45 0%, #160828 45%, #0a0412 100%) fixed var(--bg);
+  background: radial-gradient(1400px 900px at 55% 45%, #1a1324 0%, #110d17 45%, #08060b 100%) fixed var(--bg);
   color: var(--text);
   font-family: var(--ui);
   font-size: 16px;
@@ -506,11 +506,11 @@ html.presenter .hud-strip .canvas-wrap {
 
 .legend i[data-c='smooth'] {
   height: 4px;
-  background: #3d2a5c;
+  background: #2c2535;
 }
 .legend i[data-c='slow'] {
   height: 7px;
-  background: #9a86c4;
+  background: #8a7fa0;
 }
 .legend i[data-c='dropped'] {
   height: 10px;
@@ -889,7 +889,7 @@ html.jank-flash body::after {
   overflow-x: auto;
   padding: 14px 16px;
   border-radius: 10px;
-  background: #12081f;
+  background: #0f0c14;
   border: 1px solid var(--line);
   font-size: 14px;
   line-height: 1.5;
@@ -1343,7 +1343,7 @@ html.jank-flash body::after {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgb(8 3 14 / 0.7);
+  background: rgb(7 5 10 / 0.7);
   z-index: 60;
 }
 
@@ -1479,6 +1479,15 @@ html.presenter .badge {
   .badge {
     display: none;
   }
+  /* The highlighted animal already says which team; keep the badge short. */
+  .room-chip-label {
+    display: none;
+  }
+  .brand {
+    gap: 8px;
+    font-size: 18px;
+  }
+
   /* ☰ menu: recording, speed, CPU and the toggles live in a dropdown. */
   .menu-btn {
     display: grid;
@@ -1629,7 +1638,7 @@ html.presenter .badge {
     position: fixed;
     inset: 0;
     z-index: 49;
-    background: rgb(8 3 14 / 0.6);
+    background: rgb(7 5 10 / 0.6);
     -webkit-backdrop-filter: blur(6px);
     backdrop-filter: blur(6px);
     animation: sc-fade 0.25s ease-out;
@@ -1724,7 +1733,7 @@ html.presenter .badge {
   padding: 20px;
   background:
     radial-gradient(600px 400px at 50% 0%, rgb(245 185 66 / 0.18), transparent 70%),
-    rgb(8 3 14 / 0.82);
+    rgb(7 5 10 / 0.82);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
@@ -1855,7 +1864,7 @@ html.presenter .badge {
   border: 1px solid var(--line);
   border-left: 3px solid var(--c);
   border-radius: 12px;
-  background: rgb(15 6 25 / 0.6);
+  background: rgb(12 9 16 / 0.6);
 }
 
 .join-teams li span {
@@ -1905,4 +1914,24 @@ html.presenter .badge {
   50% {
     opacity: 0.3;
   }
+}
+
+/* Phone in a live room: no Start button, the presenter starts the round. */
+.room-wait {
+  display: inline-flex;
+  flex: 1 1 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.room-wait i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: join-pulse 1.4s ease-in-out infinite;
 }

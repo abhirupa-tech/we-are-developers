@@ -67,7 +67,7 @@ function QrCode({ text }: { text: string }) {
   return (
     <svg className="rs-qr" viewBox={`-2 -2 ${path.n + 4} ${path.n + 4}`} role="img" aria-label={`QR code: ${text}`}>
       <rect x={-2} y={-2} width={path.n + 4} height={path.n + 4} fill="#fff" rx={2} />
-      <path d={path.d} fill="#0f0619" />
+      <path d={path.d} fill="#0c0910" />
     </svg>
   );
 }
@@ -148,6 +148,23 @@ function Presenter({ snapshot, onClose }: { snapshot: RoomSnapshot | null; onClo
   const [limit, setLimit] = useState(30);
   const [confirmReset, setConfirmReset] = useState(false);
   const live = (snapshot?.running ?? 0) > 0;
+
+  // Start → loading: "Starting…" until the room confirms the new round, then
+  // "Round running" until every phone has reported (or time is up).
+  const [awaiting, setAwaiting] = useState<{ prevId: number | null } | null>(null);
+  const roundId = snapshot?.round?.id ?? null;
+  useEffect(() => {
+    if (awaiting && roundId !== awaiting.prevId) setAwaiting(null);
+  }, [roundId, awaiting]);
+  useEffect(() => {
+    if (!awaiting) return;
+    const t = setTimeout(() => setAwaiting(null), 8000); // never stuck if the start is lost
+    return () => clearTimeout(t);
+  }, [awaiting]);
+  const round = snapshot?.round;
+  const inRound = !!round && !snapshot?.result?.complete;
+  const loading = !!awaiting || inRound;
+  const secondsLeft = round && round.limitMs > 0 && snapshot ? Math.max(0, Math.ceil((round.limitMs - (snapshot.now - round.startedAt)) / 1000)) : null;
   return (
     <section className="rs-card rs-presenter" aria-label="Presenter controls">
       <header className="rs-card-head">
@@ -207,10 +224,26 @@ function Presenter({ snapshot, onClose }: { snapshot: RoomSnapshot | null; onClo
         </label>
       </div>
       <div className="rs-actions">
-        <button type="button" className="rs-go" onClick={() => room.start({ recording, rate: speed, cpu, limitMs: limit * 1000 })}>
-          ▶ Start round on all phones
+        <button
+          type="button"
+          className={`rs-go ${loading ? 'is-loading' : ''}`}
+          disabled={loading}
+          aria-busy={loading}
+          onClick={() => {
+            setAwaiting({ prevId: roundId });
+            room.start({ recording, rate: speed, cpu, limitMs: limit * 1000 });
+          }}
+        >
+          {loading && <span className="rs-spinner" aria-hidden="true" />}
+          {awaiting
+            ? 'Starting…'
+            : inRound
+              ? round?.stopped
+                ? 'Wrapping up…'
+                : `Round running${secondsLeft != null ? ` · ${secondsLeft} s` : '…'}`
+              : '▶ Start round on all phones'}
         </button>
-        <button type="button" className="rs-ghost" onClick={room.stop} disabled={!live}>
+        <button type="button" className="rs-ghost" onClick={room.stop} disabled={!live && !inRound}>
           ■ Stop
         </button>
       </div>

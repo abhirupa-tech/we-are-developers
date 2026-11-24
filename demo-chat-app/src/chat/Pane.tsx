@@ -49,7 +49,7 @@ export function Pane({
   onRetry?: () => void;
   /** Offered when a Gemini run fails (quota, network): switch to the recordings. */
   onFallback?: () => void;
-  emptyHint?: 'gemini' | 'recorded';
+  emptyHint?: 'gemini' | 'recorded' | 'room';
   compact?: boolean;
 }) {
   const Message = messageFor(strategy);
@@ -83,7 +83,11 @@ export function Pane({
       <div ref={transcriptRef} className="transcript" role="log" aria-live="off" aria-busy={status === 'streaming'}>
         {!prompt && (
           <p className="empty">
-            {emptyHint === 'gemini' ? (
+            {emptyHint === 'room' ? (
+              <>
+                The presenter starts the round. Your phone streams the answer with <code>{strategy.label}</code>.
+              </>
+            ) : emptyHint === 'gemini' ? (
               <>
                 Ask Gemini a question below. Its answer streams through <code>{strategy.label}</code>.
               </>

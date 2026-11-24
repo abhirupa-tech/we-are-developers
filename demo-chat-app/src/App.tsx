@@ -4,7 +4,7 @@ import { A2UI_SYSTEM_PROMPT } from './a2ui/prompt';
 import { Pane, type PaneStatus } from './chat/Pane';
 import { Probe } from './chat/Probe';
 import { AskBar } from './chat/AskBar';
-import { BUILD, FLAGS, GEMINI, PROFILER_ACTIVE, REACT_VERSION } from './config';
+import { BUILD, FLAGS, GEMINI, IS_PHONE, PROFILER_ACTIVE, REACT_VERSION } from './config';
 import { CPU_FACTORS, setCpuFactor } from './debug/cpuThrottle';
 import type { Round } from './room/protocol';
 import { JoinRoom, RoomChip, TeamCard } from './room/JoinRoom';
@@ -623,7 +623,7 @@ export function App() {
                 error={run?.error}
                 onRetry={() => start(run?.source === 'gemini' ? run.prompt : undefined)}
                 onFallback={run?.source === 'gemini' ? () => setFeed('recorded') : undefined}
-                emptyHint={feed}
+                emptyHint={ROOM_ENABLED && joined ? 'room' : feed}
               />
             );
           })}
@@ -670,6 +670,11 @@ export function App() {
           <button type="button" className="btn btn-stop" onClick={stop}>
             Stop
           </button>
+        ) : ROOM_ENABLED && IS_PHONE ? (
+          // In a live room the presenter starts every phone's run.
+          <span className="room-wait">
+            <i /> Waiting for the presenter to start the round
+          </span>
         ) : (
           feed === 'recorded' && (
             <button type="button" className="btn btn-go" onClick={() => start()} disabled={!recording}>
