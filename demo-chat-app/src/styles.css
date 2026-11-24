@@ -198,7 +198,7 @@ button {
 .segmented button[data-strategy='setState'].on {
   background: var(--s-setstate);
 }
-.segmented button[data-strategy='buffered'].on,
+.segmented button[data-strategy='memo'].on,
 .segmented button[data-strategy='transition'].on {
   background: var(--s-transition);
 }
@@ -812,7 +812,7 @@ html.jank-flash body::after {
 .pane[data-strategy='setState'] {
   --pane-color: var(--s-setstate);
 }
-.pane[data-strategy='buffered'],
+.pane[data-strategy='memo'],
 .pane[data-strategy='transition'] {
   --pane-color: var(--s-transition);
 }
@@ -1180,7 +1180,7 @@ html.jank-flash body::after {
 .sc-pane[data-strategy='setState'] {
   --pane-color: var(--s-setstate);
 }
-.sc-pane[data-strategy='buffered'],
+.sc-pane[data-strategy='memo'],
 .sc-pane[data-strategy='transition'] {
   --pane-color: var(--s-transition);
 }
@@ -1813,4 +1813,85 @@ html.presenter .badge {
 .room-chip b {
   color: var(--text);
   font-weight: 600;
+}
+
+.join-emoji-trio {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-size: 64px;
+}
+
+.join-emoji-trio span:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.join-teams {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.join-teams li {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--c);
+  border-radius: 12px;
+  background: rgb(11 16 32 / 0.6);
+}
+
+.join-teams li span {
+  font-size: 22px;
+}
+
+.join-teams code {
+  justify-self: end;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--c);
+  text-align: right;
+}
+
+.join-method {
+  margin: 0 0 14px;
+}
+
+.join-method code {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--c);
+  color: var(--c);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.join-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.join-wait i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: join-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes join-pulse {
+  50% {
+    opacity: 0.3;
+  }
 }

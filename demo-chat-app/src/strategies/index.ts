@@ -1,12 +1,12 @@
-import { bufferedStrategy } from './buffered';
 import { frameBatchedStrategy } from './frameBatched';
+import { memoBlocksStrategy } from './memoBlocks';
 import { setStateStrategy } from './setState';
 import { syncStoreStrategy } from './syncStore';
 import { transitionStrategy } from './transition';
 import type { Strategy, StrategyId } from './types';
 
 /** The three the demo compares, worst to best. */
-export const STRATEGIES: Strategy[] = [setStateStrategy, bufferedStrategy, frameBatchedStrategy];
+export const STRATEGIES: Strategy[] = [setStateStrategy, memoBlocksStrategy, frameBatchedStrategy];
 
 /** Every strategy, including ones no longer in the selector (the A2UI mode reports as syncStore). */
 export const strategyById = Object.fromEntries(
@@ -16,7 +16,7 @@ export const strategyById = Object.fromEntries(
 /** CSS variable owning each strategy's colour (selector, ghosts, grades). */
 export const STRATEGY_COLOR_VAR: Record<StrategyId, string> = {
   setState: '--s-setstate',
-  buffered: '--s-transition',
+  memo: '--s-transition',
   transition: '--s-transition',
   syncStore: '--s-store',
   frameBatched: '--s-frame',

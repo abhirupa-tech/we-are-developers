@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { renderA2ui } from '../a2ui/renderA2ui';
 import { useRenderFlash } from '../debug/renderFlash';
+import { BlockMarkdown } from './BlockMarkdown';
 import { MarkdownText } from './MarkdownText';
 import type { RunCollector } from '../metrics/collector';
 
@@ -22,7 +23,18 @@ export const PaneContext = createContext<RunCollector | null>(null);
  * every strategy, so heavy UI can be compared across strategies too.
  * `render` overrides the body; the profiler hooks stay the same.
  */
-export function AssistantMessage({ text, seq, render }: { text: string; seq: number; render?: (text: string) => ReactNode }) {
+export function AssistantMessage({
+  text,
+  seq,
+  render,
+  blocks,
+}: {
+  text: string;
+  seq: number;
+  render?: (text: string) => ReactNode;
+  /** Render as memoized blocks: finished blocks are frozen (React.memo). */
+  blocks?: boolean;
+}) {
   const collector = useContext(PaneContext);
   const ref = useRenderFlash<HTMLDivElement>('AssistantMessage');
 
@@ -35,7 +47,7 @@ export function AssistantMessage({ text, seq, render }: { text: string; seq: num
     <div ref={ref} className="msg msg-assistant">
       <div className="msg-who">Assistant</div>
       <div className="md">
-        {render ? render(text) : text.includes('```a2ui') ? renderA2ui(text) : <MarkdownText text={text} />}
+        {render ? render(text) : text.includes('```a2ui') ? renderA2ui(text) : blocks ? <BlockMarkdown text={text} /> : <MarkdownText text={text} />}
         <span className="caret" aria-hidden="true" />
       </div>
     </div>

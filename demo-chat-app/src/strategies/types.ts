@@ -1,7 +1,7 @@
 import type { FC } from 'react';
 import type { EventBus } from '../stream/EventBus';
 
-export type StrategyId = 'setState' | 'buffered' | 'transition' | 'syncStore' | 'frameBatched';
+export type StrategyId = 'setState' | 'memo' | 'transition' | 'syncStore' | 'frameBatched';
 
 /** What a strategy needs from the bus: subscribe to one message's events. */
 export type MessageBus = Pick<EventBus, 'on'>;

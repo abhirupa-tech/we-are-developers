@@ -7,10 +7,11 @@ import { AskBar } from './chat/AskBar';
 import { BUILD, FLAGS, GEMINI, PROFILER_ACTIVE, REACT_VERSION } from './config';
 import { CPU_FACTORS, setCpuFactor } from './debug/cpuThrottle';
 import type { Round } from './room/protocol';
-import { JoinRoom, RoomChip } from './room/JoinRoom';
+import { JoinRoom, RoomChip, TeamCard } from './room/JoinRoom';
 import { beginReport, endReport } from './room/reporter';
 import { ROOM_ENABLED, room } from './room/roomClient';
-import { ANIMAL_EMOJI, ANIMALS, animal, dropSound, onDropSound } from './debug/dropSound';
+import { ANIMAL_EMOJI, ANIMALS, dropSound, getAnimal, onDropSound, subscribeAnimal } from './debug/dropSound';
+import { TEAM_STRATEGY } from './room/teams';
 import { renderFlash, useRenderFlash } from './debug/renderFlash';
 import { Hud } from './hud/Hud';
 import type { HudController } from './hud/controller';
@@ -73,6 +74,12 @@ export function App() {
   const [feed, setFeed] = useState<Feed>('recorded');
   const flashOn = useSyncExternalStore(renderFlash.subscribe, renderFlash.getSnapshot);
   const audioOn = useSyncExternalStore(dropSound.subscribe, dropSound.getSnapshot);
+  /** This page's animal: random, or the team the live room assigned. */
+  const animal = useSyncExternalStore(subscribeAnimal, getAnimal);
+  const roomStatus = useSyncExternalStore(room.subscribe, room.getSnapshot);
+  /** The presenter round the next run belongs to (live room only). */
+  const roomRound = useRef<number | undefined>(undefined);
+  const [teamCardOpen, setTeamCardOpen] = useState(true);
   /** Live room (?room=…): this device has tapped Join. */
   const [joined, setJoined] = useState(false);
   /** A round the presenter started, waiting for the matching settings to apply. */
@@ -209,7 +216,8 @@ export function App() {
     const ids: StrategyId[] = live ? ['syncStore'] : compare ? STRATEGIES.map((s) => s.id) : [strategy];
     const panes = ids.map((s, i) => ({ strategy: s, collector: new RunCollector(`run${id}-pane${i}`, s, frames.startedAt) }));
     // Live room: report this run (single strategy or A2UI; Compare shares one thread, so it isn't reported).
-    if (ROOM_ENABLED && !compare) beginReport(live === 'a2ui' ? 'a2ui' : ids[0], cpu, frames, panes[0].collector);
+    if (ROOM_ENABLED && !compare) beginReport(live === 'a2ui' ? 'a2ui' : ids[0], cpu, frames, panes[0].collector, roomRound.current);
+    roomRound.current = undefined;
     const view: RunView = {
       id,
       source: asking ? (live ? 'chat' : 'gemini') : 'recorded',
@@ -324,9 +332,14 @@ export function App() {
   // ── Live room ─────────────────────────────────────────────────────────
   const joinRoom = useCallback(() => {
     if (!dropSound.getSnapshot()) dropSound.toggle(); // the tap unlocks audio
-    room.joinAsPlayer(animal, deviceMs);
+    room.joinAsPlayer(deviceMs);
     setJoined(true);
   }, [deviceMs]);
+
+  // In a room, each phone runs its team's method.
+  useEffect(() => {
+    if (roomStatus.team) setStrategy(TEAM_STRATEGY[roomStatus.team]);
+  }, [roomStatus.team]);
 
   // Every animal noise counts towards the room's noise meter.
   useEffect(() => onDropSound(room.sound), []);
@@ -339,8 +352,8 @@ export function App() {
         setLive(false);
         setCompare(false);
         setMenuOpen(false);
-        const s = STRATEGIES.find((x) => x.id === round.strategy);
-        if (s) setStrategy(s.id);
+        setTeamCardOpen(false);
+        setStrategy(TEAM_STRATEGY[getAnimal()]);
         if (round.recording) setRecordingId(round.recording);
         if (RATES.includes(round.rate)) setRate(round.rate);
         if (CPU_FACTORS.includes(round.cpu)) setCpu(round.cpu);
@@ -351,14 +364,14 @@ export function App() {
   useEffect(() => room.onStop(stop), [stop]);
   useEffect(() => {
     if (!pendingGo) return;
-    const knownStrategy = STRATEGIES.some((x) => x.id === pendingGo.strategy);
     const knownRecording = recordings.some((r) => r.id === pendingGo.recording);
-    if (knownStrategy && strategy !== pendingGo.strategy) return;
+    if (strategy !== TEAM_STRATEGY[getAnimal()]) return;
     if (knownRecording && recording?.id !== pendingGo.recording) return;
     if (RATES.includes(pendingGo.rate) && rate !== pendingGo.rate) return;
     if (CPU_FACTORS.includes(pendingGo.cpu) && cpu !== pendingGo.cpu) return;
     if (live || compare || !recording) return;
     setPendingGo(null);
+    roomRound.current = pendingGo.id;
     start();
   }, [pendingGo, strategy, recording, recordings, rate, cpu, live, compare, start]);
 
@@ -530,7 +543,8 @@ export function App() {
         </div>
       </header>
       {menuOpen && <div className="menu-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
-      {ROOM_ENABLED && !joined && <JoinRoom animal={animal} onJoin={joinRoom} />}
+      {ROOM_ENABLED && !joined && <JoinRoom onJoin={joinRoom} />}
+      {ROOM_ENABLED && joined && roomStatus.team && teamCardOpen && !running && <TeamCard team={roomStatus.team} onClose={() => setTeamCardOpen(false)} />}
 
       {FLAGS.hud && (
         <Hud
