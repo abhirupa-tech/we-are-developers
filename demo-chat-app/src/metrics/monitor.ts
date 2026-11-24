@@ -36,6 +36,7 @@ const jankListeners = new Set<JankListener>();
 
 let last = 0;
 let baseline = 1000 / 60;
+let calibrated = false;
 let run: RunFrames | null = null;
 let started = false;
 
@@ -126,7 +127,14 @@ export function recordInteraction(durationMs: number): void {
 }
 
 export function beginRun(): RunFrames {
-  baseline = calibrateInterval(idleIntervals.toArray());
+  // The display's refresh rate doesn't slow down between runs. Idle frames
+  // right after a heavy run are often still janky (GC, a hot phone, the
+  // scorecard animating), which used to read as "a 30 Hz screen" and double
+  // the dropped-frame threshold, so later runs reported ~0 dropped frames.
+  // Keep the fastest stable interval seen, so every run is judged the same.
+  const measured = calibrateInterval(idleIntervals.toArray());
+  baseline = calibrated ? Math.min(baseline, measured) : measured;
+  calibrated = true;
   run = {
     startedAt: performance.now(),
     baselineMs: baseline,
