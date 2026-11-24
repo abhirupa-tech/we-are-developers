@@ -1,10 +1,10 @@
 /* MockGPT: a lab instrument on a darkened stage. The chat is calm, the HUD is loud. */
 :root {
   /* Slide palette: purple-black stage, warm cream type, gold and peach accents. */
-  --bg: #0c0910;
-  --panel: #141019;
-  --panel-2: #1b1622;
-  --line: #2d2635;
+  --bg: #130e1a;
+  --panel: #1b1524;
+  --panel-2: #231c2d;
+  --line: #372e43;
   --text: #f6e7d9;
   --muted: #b3a0aa;
   /* Team colours: unchanged (dogs, ducks, cats). */
@@ -40,7 +40,7 @@ body,
 body {
   margin: 0;
   /* The slides' soft violet glow in the middle of a near-black stage. */
-  background: radial-gradient(1400px 900px at 55% 45%, #1a1324 0%, #110d17 45%, #08060b 100%) fixed var(--bg);
+  background: radial-gradient(1400px 900px at 55% 45%, #251a33 0%, #181121 45%, #0e0a13 100%) fixed var(--bg);
   color: var(--text);
   font-family: var(--ui);
   font-size: 16px;
@@ -890,7 +890,7 @@ html.jank-flash body::after {
   overflow-x: auto;
   padding: 14px 16px;
   border-radius: 10px;
-  background: #0f0c14;
+  background: #16111d;
   border: 1px solid var(--line);
   font-size: 14px;
   line-height: 1.5;
@@ -1344,7 +1344,7 @@ html.jank-flash body::after {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgb(7 5 10 / 0.7);
+  background: rgb(12 9 16 / 0.7);
   z-index: 60;
 }
 
@@ -1639,7 +1639,7 @@ html.presenter .badge {
     position: fixed;
     inset: 0;
     z-index: 49;
-    background: rgb(7 5 10 / 0.6);
+    background: rgb(12 9 16 / 0.6);
     -webkit-backdrop-filter: blur(6px);
     backdrop-filter: blur(6px);
     animation: sc-fade 0.25s ease-out;
@@ -1734,7 +1734,7 @@ html.presenter .badge {
   padding: 20px;
   background:
     radial-gradient(600px 400px at 50% 0%, rgb(245 185 66 / 0.18), transparent 70%),
-    rgb(7 5 10 / 0.82);
+    rgb(12 9 16 / 0.82);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
@@ -1865,7 +1865,7 @@ html.presenter .badge {
   border: 1px solid var(--line);
   border-left: 3px solid var(--c);
   border-radius: 12px;
-  background: rgb(12 9 16 / 0.6);
+  background: rgb(19 14 26 / 0.6);
 }
 
 .join-teams li span {
