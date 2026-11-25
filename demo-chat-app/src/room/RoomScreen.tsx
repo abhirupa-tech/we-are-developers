@@ -6,6 +6,7 @@ import { RECORDINGS } from '../stream/fixtures';
 import type { RoomSnapshot, Totals } from './protocol';
 import { ROOM_ENABLED, ROOM_NAME, room } from './roomClient';
 import { Celebration } from './Celebration';
+import { stageAudio } from './stageAudio';
 import { TEAM_COLOR, TEAM_METHOD, TEAM_NAME } from './teams';
 import './room.css';
 
@@ -111,11 +112,11 @@ function useParticles(snapshot: RoomSnapshot | null) {
     if (!snapshot) return;
     const born: Particle[] = [];
     for (const team of ANIMALS) {
-      const sounds = snapshot.teams[team]?.sounds ?? 0;
+      const dropped = snapshot.teams[team]?.dropped ?? 0;
       const before = prev.current[team];
-      prev.current[team] = sounds;
-      if (before === undefined) continue;
-      const n = Math.min(2, sounds - before);
+      prev.current[team] = dropped;
+      if (before === undefined || dropped <= before) continue;
+      const n = Math.min(3, 1 + Math.floor((dropped - before) / 10));
       for (let i = 0; i < n; i++) {
         born.push({
           id: seq.current++,
@@ -129,7 +130,7 @@ function useParticles(snapshot: RoomSnapshot | null) {
       }
     }
     if (!born.length) return;
-    setParticles((p) => [...p, ...born.slice(0, 6)].slice(-24));
+    setParticles((p) => [...p, ...born.slice(0, 8)].slice(-30));
     const ids = new Set(born.map((b) => b.id));
     const t = setTimeout(() => setParticles((p) => p.filter((x) => !ids.has(x.id))), 4200);
     return () => clearTimeout(t);
@@ -246,6 +247,9 @@ function Presenter({ snapshot, onClose }: { snapshot: RoomSnapshot | null; onClo
         </button>
       </div>
       <div className="rs-actions rs-small">
+        <button type="button" className="rs-ghost" onClick={() => void stageAudio.test()} title="Plays dog (left), duck (centre), cat (right)">
+          🎧 Sound check
+        </button>
         <a className="rs-ghost" href={room.csvUrl()} download>
           ⤓ Export CSV
         </a>
@@ -281,6 +285,10 @@ export function RoomScreen() {
   }, []);
   const snap = s.snapshot;
   const particles = useParticles(snap);
+  const stageOn = useSyncExternalStore(stageAudio.subscribe, stageAudio.getSnapshot);
+  useEffect(() => {
+    if (snap) stageAudio.onSnapshot(snap);
+  }, [snap]);
   const [controls, setControls] = useState(true);
   const [dismissed, setDismissed] = useState<number | null>(null);
   const joinUrl = useMemo(() => (ROOM_ENABLED ? room.joinUrl() : ''), []);
@@ -296,6 +304,7 @@ export function RoomScreen() {
       if ((e.target as HTMLElement).tagName === 'SELECT') return;
       if (e.key === 'c') setControls((c) => !c);
       if (e.key === 'f') void toggleFullscreen();
+      if (e.key === 's') void stageAudio.toggle();
       if (e.key === 'Escape' && snap?.result) setDismissed(snap.result.id);
     };
     window.addEventListener('keydown', onKey);
@@ -383,6 +392,15 @@ export function RoomScreen() {
             </b>{' '}
             {s.connected ? 'phones online' : 'connecting…'}
           </div>
+          <button
+            type="button"
+            className={`rs-pill-btn ${stageOn ? 'on' : ''}`}
+            onClick={() => void stageAudio.toggle()}
+            aria-pressed={stageOn}
+            title="Stage audio: this screen plays the room's dropped frames into the headphone feed (dogs left, ducks centre, cats right). Key S."
+          >
+            {stageOn ? '🎧 Stage audio on' : '🎧 Stage audio off'}
+          </button>
           {s.presenter && (
             <button
               type="button"
@@ -524,7 +542,7 @@ export function RoomScreen() {
           <div>
             <p className="rs-kicker">Scan to join</p>
             <p className="rs-url">{shortUrl}</p>
-            <p className="rs-muted">You'll land on a random team. Your phone makes its animal's noise every time it drops a frame.</p>
+            <p className="rs-muted">You'll land on a random team. Your screen flashes your animal on every dropped frame; the room hears it in the headphones.</p>
           </div>
         </section>
 <section className="rs-card rs-pulse">

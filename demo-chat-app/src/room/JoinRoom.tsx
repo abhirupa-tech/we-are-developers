@@ -3,7 +3,6 @@ import { ANIMAL_EMOJI, ANIMALS, type Animal } from '../debug/dropSound';
 import { ROOM_NAME, room } from './roomClient';
 import { TEAM_COLOR, TEAM_METHOD, TEAM_NAME } from './teams';
 
-const NOISE: Record<Animal, string> = { dog: 'barks', cat: 'meows', duck: 'quacks' };
 
 /** Full-screen welcome for audience devices: one tap joins and turns sound on. */
 export function JoinRoom({ onJoin }: { onJoin: () => void }) {
@@ -26,11 +25,11 @@ export function JoinRoom({ onJoin }: { onJoin: () => void }) {
             </li>
           ))}
         </ul>
-        <p className="join-line">You'll be put on a team at random. Your phone makes its animal's noise every time it drops a frame. Lowest average drop rate wins.</p>
+        <p className="join-line">You'll be put on a team at random. Your screen flashes your team's animal every time it drops a frame, and the stage hears it in their headphones. Lowest average drop rate wins.</p>
         <button type="button" className="join-btn" onClick={onJoin}>
-          Join &amp; turn on sound
+          Join the experiment
         </button>
-        <p className="join-fine">Anonymous: no names, no sign-in. Just frame counts and animal noises.</p>
+        <p className="join-fine">Keep your phone on silent. Anonymous: no names, no sign-in, just frame counts.</p>
       </div>
     </div>
   );
@@ -50,7 +49,7 @@ export function TeamCard({ team, onClose }: { team: Animal; onClose: () => void 
           <code>{TEAM_METHOD[team]}</code>
         </p>
         <p className="join-line">
-          Your phone {NOISE[team]} on every dropped frame. Keep this page open and wait for the presenter to start the round.
+          Your screen flashes {ANIMAL_EMOJI[team]} on every dropped frame. Keep this page open and wait for the presenter to start the round.
         </p>
         <p className="join-wait">
           <i /> Waiting for the round…
