@@ -31,6 +31,8 @@ export type ClientMessage =
   | { t: 'live'; run: RunStats }
   | { t: 'final'; run: RunStats }
   | { t: 'sound'; n: number }
+  /** The page went to the background (or came back). Hidden phones can't measure frames. */
+  | { t: 'away'; away: boolean }
   | { t: 'start'; recording: string; rate: number; cpu: number; limitMs?: number }
   | { t: 'stop' }
   | { t: 'reset' };
@@ -66,6 +68,8 @@ export type TeamStats = {
   roundPhones: number;
   roundFinished: number;
   roundRunning: number;
+  /** This round: phones that dropped out (backgrounded, went quiet, or missed the deadline). */
+  roundOut: number;
   /** This round: mean of each phone's own drop % (every phone counts equally). */
   avgDropPct: number | null;
   /** This round: render time per commit, across the team's phones. */
@@ -81,6 +85,8 @@ export type RoundResult = {
   complete: boolean;
   /** Lowest average drop %, once complete. */
   winner: Team | null;
+  /** Phones left out of this round's score. */
+  out: number;
 };
 
 export type RoomSnapshot = {

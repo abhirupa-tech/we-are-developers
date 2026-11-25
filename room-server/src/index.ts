@@ -10,6 +10,12 @@ const SAVE_EVERY_MS = 5000; // persist at most this often
 const HISTORY_SECONDS = 90;
 const MAX_DEVICES = 1000;
 const MAX_MESSAGE_BYTES = 4096;
+/** A phone that sends nothing for this long during a round is treated as gone. */
+const STALL_MS = 3000;
+/** Phones get this long after the start to send their first update. */
+const STARTUP_MS = 5000;
+/** After the time limit, wait this long for final reports, then close the round. */
+const GRACE_MS = 2000;
 
 type Device = {
   id: string;
@@ -23,6 +29,12 @@ type Device = {
   done: Record<string, Totals>;
   /** This device's finished run for the current round. */
   roundFinal: RunStats | null;
+  /** Dropped out of the current round: not waited for, not scored. */
+  roundOut: boolean;
+  /** The page is in the background (it can't measure frames there). */
+  away: boolean;
+  /** Last live/final update during the current round. */
+  lastUpdate: number;
   lastSeen: number;
 };
 
@@ -151,6 +163,9 @@ export class Room extends DurableObject<Env> {
             live: null,
             done: {},
             roundFinal: null,
+            roundOut: false,
+            away: false,
+            lastUpdate: 0,
             lastSeen: now,
           };
         }
@@ -172,14 +187,24 @@ export class Room extends DurableObject<Env> {
       d.lastSeen = now;
       if (msg.t === 'live') {
         const run = cleanRun(msg.run);
-        if (run) d.live = run;
+        if (run) {
+          d.live = run;
+          if (run.round != null && run.round === this.state.round?.id) d.lastUpdate = now;
+        }
       } else if (msg.t === 'final') {
         const run = cleanRun(msg.run);
         if (run) {
           add((d.done[run.strategy] ??= zero()), run);
           if (d.live?.runId === run.runId) d.live = null;
-          if (run.round != null && run.round === this.state.round?.id) d.roundFinal = run;
+          if (run.round != null && run.round === this.state.round?.id && !d.roundOut) {
+            d.roundFinal = run;
+            d.lastUpdate = now;
+          }
         }
+      } else if (msg.t === 'away') {
+        d.away = !!msg.away;
+        // Backgrounded mid-round: out of this round straight away (its frame counts are meaningless).
+        if (d.away && this.inRound(d)) d.roundOut = true;
       } else if (msg.t === 'sound') {
         d.sounds += Math.min(num(msg.n, 1000), 1000);
       }
@@ -199,8 +224,13 @@ export class Room extends DurableObject<Env> {
         limitMs: num(msg.limitMs, 600_000),
       };
       this.state.round = round;
-      this.state.participants = [...this.onlineIds()];
-      for (const d of Object.values(this.state.devices)) d.roundFinal = null;
+      // Phones in the background don't take part: they can't measure frames.
+      this.state.participants = [...this.onlineIds()].filter((id) => !this.state.devices[id]?.away);
+      for (const d of Object.values(this.state.devices)) {
+        d.roundFinal = null;
+        d.roundOut = false;
+        d.lastUpdate = 0;
+      }
       this.broadcast({ t: 'go', ...round }, 'player');
     } else if (msg.t === 'stop') {
       if (this.state.round) this.state.round.stopped = true;
@@ -255,6 +285,7 @@ export class Room extends DurableObject<Env> {
       this.broadcast({ t: 'stop' }, 'player');
       this.dirty = true;
     }
+    this.settleRound(now);
     const snap = this.snapshot();
     if (this.tickCount === 1) {
       // Fresh instance: start the per-second history from current totals.
@@ -291,6 +322,32 @@ export class Room extends DurableObject<Env> {
     if ((await this.ctx.storage.getAlarm()) == null) await this.ctx.storage.setAlarm(Date.now() + TICK_MS);
   }
 
+  /** Taking part in the current round and not finished or out yet. */
+  private inRound(d: Device) {
+    return !!this.state.round && this.state.participants.includes(d.id) && !d.roundFinal && !d.roundOut;
+  }
+
+  /**
+   * Never wait on a phone that isn't coming: mark phones out of the current
+   * round when they went quiet (no update for STALL_MS, after STARTUP_MS),
+   * disconnected, or are still missing GRACE_MS after the time limit.
+   */
+  private settleRound(now: number) {
+    const r = this.state.round;
+    if (!r) return;
+    const online = this.onlineIds();
+    const pastDeadline = r.limitMs > 0 && now - r.startedAt >= r.limitMs + GRACE_MS;
+    for (const id of this.state.participants) {
+      const d = this.state.devices[id];
+      if (!d || !this.inRound(d)) continue;
+      const since = Math.max(d.lastUpdate, r.startedAt + STARTUP_MS);
+      if (!online.has(id) || d.away || pastDeadline || now - since > STALL_MS) {
+        d.roundOut = true;
+        this.dirty = true;
+      }
+    }
+  }
+
   // ── Aggregation ───────────────────────────────────────────────────────
   private onlineIds() {
     const ids = new Set<string>();
@@ -313,7 +370,7 @@ export class Room extends DurableObject<Env> {
     const teams = Object.fromEntries(
       TEAMS.map((t) => [
         t,
-        { devices: 0, online: 0, sounds: 0, roundPhones: 0, roundFinished: 0, roundRunning: 0, avgDropPct: null, avgRenderMs: null, frames: 0, dropped: 0 } satisfies TeamStats,
+        { devices: 0, online: 0, sounds: 0, roundPhones: 0, roundFinished: 0, roundRunning: 0, roundOut: 0, avgDropPct: null, avgRenderMs: null, frames: 0, dropped: 0 } satisfies TeamStats,
       ]),
     ) as Record<Team, TeamStats>;
     const pcts: Record<Team, number[]> = { dog: [], duck: [], cat: [] };
@@ -350,10 +407,14 @@ export class Room extends DurableObject<Env> {
       if (roundId != null && participants.has(d.id)) {
         team.roundPhones++;
         const liveRound = liveNow?.round === roundId ? liveNow : null;
-        const run = d.roundFinal ?? liveRound;
-        if (d.roundFinal) team.roundFinished++;
-        else if (liveRound) team.roundRunning++;
-        if (!d.roundFinal && isOnline) outstanding++;
+        // Phones that dropped out are neither waited for nor scored.
+        const run = d.roundOut ? null : (d.roundFinal ?? liveRound);
+        if (d.roundOut) team.roundOut++;
+        else if (d.roundFinal) team.roundFinished++;
+        else {
+          if (liveRound) team.roundRunning++;
+          outstanding++;
+        }
         if (run && run.frames > 0) {
           pcts[d.team].push((run.dropped / run.frames) * 100);
           render[d.team].ms += run.renderMs;
@@ -372,8 +433,8 @@ export class Room extends DurableObject<Env> {
 
     let result: RoomSnapshot['result'] = null;
     if (roundId != null) {
-      const finishedAny = TEAMS.some((t) => teams[t].roundFinished > 0);
-      const complete = finishedAny && outstanding === 0;
+      // Complete once nobody is outstanding; a round where everyone dropped out has no winner.
+      const complete = outstanding === 0;
       let winner: Team | null = null;
       if (complete) {
         for (const t of TEAMS) {
@@ -382,7 +443,7 @@ export class Room extends DurableObject<Env> {
           if (winner == null || v < (teams[winner].avgDropPct ?? Infinity)) winner = t;
         }
       }
-      result = { id: roundId, complete, winner };
+      result = { id: roundId, complete, winner, out: TEAMS.reduce((n, t) => n + teams[t].roundOut, 0) };
     }
 
     return {

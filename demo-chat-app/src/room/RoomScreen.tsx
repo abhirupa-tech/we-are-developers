@@ -332,6 +332,8 @@ export function RoomScreen() {
   const teams = ANIMALS.map((a) => ({ a, v: snap?.teams[a] }));
   const roundPhones = teams.reduce((n, x) => n + (x.v?.roundPhones ?? 0), 0);
   const roundFinished = teams.reduce((n, x) => n + (x.v?.roundFinished ?? 0), 0);
+  /** Phones that went to the background, went quiet or missed the deadline: not waited for, not scored. */
+  const roundOut = teams.reduce((n, x) => n + (x.v?.roundOut ?? 0), 0);
   const pcts = teams.map((x) => x.v?.avgDropPct ?? NaN);
   const maxPct = Math.max(1, ...pcts.filter(Number.isFinite));
   const leader = result?.complete ? result.winner : null;
@@ -369,11 +371,13 @@ export function RoomScreen() {
             result?.complete ? (
               <>
                 <i className="is-done" /> Round complete · <b>{roundFinished}</b> phones
+                {roundOut > 0 && <span className="rs-muted"> · {roundOut} dropped out</span>}
               </>
             ) : (
               <>
                 <i /> Round running · <b>{roundFinished}</b>
                 <span className="rs-muted">/ {roundPhones} phones finished</span>
+                {roundOut > 0 && <span className="rs-muted"> · {roundOut} out</span>}
                 {round.limitMs > 0 && !round.stopped && snap && (
                   <span className="rs-countdown">{Math.max(0, Math.ceil((round.limitMs - (snap.now - round.startedAt)) / 1000))} s left</span>
                 )}
@@ -527,7 +531,7 @@ export function RoomScreen() {
                       )}
                     </b>
                     <span>
-                      {v?.roundFinished ?? 0}/{v?.roundPhones ?? 0} done ·{' '}
+                      {v?.roundFinished ?? 0}/{v?.roundPhones ?? 0} done{v?.roundOut ? ` · ${v.roundOut} out` : ''} ·{' '}
                       {v?.avgRenderMs != null ? `${fmt(v.avgRenderMs, 1)} ms render` : '– ms render'}
                     </span>
                   </div>
@@ -562,7 +566,9 @@ export function RoomScreen() {
               <span>Finished this round</span>
               <b>
                 <Counter value={roundFinished} />
-                <small>/ {fmt(roundPhones)} phones</small>
+                <small>
+                  / {fmt(roundPhones)} phones{roundOut > 0 ? ` · ${roundOut} out` : ''}
+                </small>
               </b>
             </div>
             <div className="rs-pulse-stat">
