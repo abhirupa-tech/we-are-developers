@@ -168,7 +168,6 @@ export const room = {
     const u = new URL(window.location.href);
     u.search = '';
     u.searchParams.set('room', ROOM_NAME);
-    u.searchParams.set('audio', '1');
     if (params.get('server')) u.searchParams.set('server', SERVER);
     return u.toString();
   },

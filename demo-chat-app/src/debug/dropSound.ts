@@ -37,7 +37,9 @@ export function setAnimal(next: Animal) {
   animalListeners.forEach((l) => l());
 }
 
-let enabled = new URLSearchParams(window.location.search).get('audio') === '1';
+// Never on phones in a live room: silent stages use the projector's stage audio.
+const search = new URLSearchParams(window.location.search);
+let enabled = search.get('audio') === '1' && !search.get('room');
 let ctx: AudioContext | null = null;
 let clip: AudioBuffer | null = null;
 let loading: Promise<void> | null = null;

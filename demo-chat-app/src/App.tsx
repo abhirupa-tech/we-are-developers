@@ -8,6 +8,7 @@ import { BUILD, FLAGS, GEMINI, PROFILER_ACTIVE, REACT_VERSION } from './config';
 import { CPU_FACTORS, setCpuFactor } from './debug/cpuThrottle';
 import type { Round } from './room/protocol';
 import { JoinRoom, RoomChip, TeamCard } from './room/JoinRoom';
+import { enableDropFlash } from './room/dropFlash';
 import { beginReport, endReport } from './room/reporter';
 import { ROOM_ENABLED, room } from './room/roomClient';
 import { ANIMAL_EMOJI, ANIMALS, dropSound, getAnimal, onDropSound, subscribeAnimal } from './debug/dropSound';
@@ -352,7 +353,8 @@ export function App() {
 
   // ── Live room ─────────────────────────────────────────────────────────
   const joinRoom = useCallback(() => {
-    if (!dropSound.getSnapshot()) dropSound.toggle(); // the tap unlocks audio
+    // Silent stage: phones flash (and buzz) on dropped frames; the projector plays the sound.
+    enableDropFlash();
     room.joinAsPlayer(deviceMs);
     setJoined(true);
   }, [deviceMs]);
@@ -411,7 +413,7 @@ export function App() {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
       const k = e.key.toLowerCase();
       // In a room only the display toggles work; the presenter runs everything else.
-      if (locked && !['f', 'a', 'p', 'g', '?', 'escape'].includes(k)) return;
+      if (locked && !['f', 'p', 'g', '?', 'escape'].includes(k)) return;
       if (k === '1' || k === '2' || k === '3') switchTo(STRATEGIES[Number(k) - 1].id);
       else if (k === '4') toggleLive('a2ui');
       else if (k === 'f') renderFlash.toggle();
@@ -557,6 +559,7 @@ export function App() {
           >
             Flash renders
           </button>
+          {!locked && (
           <button
             type="button"
             className={`chip ${audioOn ? 'on' : ''}`}
@@ -566,6 +569,7 @@ export function App() {
           >
             {audioOn ? '🔊' : '🔇'} Audio
           </button>
+          )}
           {!locked && (
           <label className="chip cpu-select" title="Simulated CPU throttle: each commit also blocks the main thread for (N - 1) times its render time">
             CPU
