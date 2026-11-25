@@ -103,7 +103,10 @@ export function Celebration({ snapshot, winner, onClose }: { snapshot: RoomSnaps
       </div>
 
       <div className="party-card" style={{ '--c': TEAM_COLOR[winner] } as React.CSSProperties} onClick={(e) => e.stopPropagation()}>
-        <p className="party-kicker">Round complete · {phones} phones</p>
+        <p className="party-kicker">
+          Round complete · {phones} phones
+          {(snapshot.result?.out ?? 0) > 0 && ` · ${snapshot.result!.out} dropped out`}
+        </p>
         <div className="party-emoji" aria-hidden="true">
           {ANIMAL_EMOJI[winner]}
         </div>

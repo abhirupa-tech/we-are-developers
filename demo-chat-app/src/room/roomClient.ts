@@ -71,6 +71,8 @@ function connect() {
         if (hello?.role === 'player') hello = { ...hello, team: msg.team };
       }
       set({ presenter: msg.presenter, joined: true, team: msg.team ?? status.team });
+      // (Re)joined while in the background: say so, so the room doesn't wait on us.
+      if (hello?.role === 'player' && document.hidden) send({ t: 'away', away: true });
     } else if (msg.t === 'rejoin') {
       // The room was reset: join again (keeping our team if the room can).
       if (hello && ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(hello));
@@ -87,6 +89,19 @@ function connect() {
     const delay = Math.min(10_000, 500 * 2 ** retry++) * (0.75 + Math.random() * 0.5);
     setTimeout(connect, delay);
   };
+}
+
+/**
+ * A backgrounded tab can't measure frames (browsers pause drawing), and on
+ * phones it often stops running at all. Tell the room straight away, so it
+ * leaves this phone out of the round instead of waiting for it.
+ */
+let watching = false;
+function watchVisibility() {
+  if (watching) return;
+  watching = true;
+  document.addEventListener('visibilitychange', () => send({ t: 'away', away: document.hidden }));
+  window.addEventListener('pagehide', () => send({ t: 'away', away: true }));
 }
 
 function flush() {
@@ -115,6 +130,7 @@ export const room = {
 
   /** Audience device: join; the room assigns a team. */
   joinAsPlayer(deviceMs: number | null) {
+    watchVisibility();
     hello = { t: 'hello', id, role: 'player', mobile: matchMedia('(pointer: coarse)').matches, deviceMs };
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(hello));
     else connect();
