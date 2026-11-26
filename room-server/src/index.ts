@@ -5,7 +5,10 @@ export interface Env {
   ROOM: DurableObjectNamespace<Room>;
 }
 
-const TICK_MS = 500; // live snapshot cadence
+/** Screens get at most one snapshot per this long, and only when something changed. */
+const BROADCAST_MS = 500;
+/** During a round only: countdown, time limit and stalled-phone checks run this often. */
+const ROUND_TICK_MS = 1000;
 const SAVE_EVERY_MS = 5000; // persist at most this often
 const HISTORY_SECONDS = 90;
 const MAX_DEVICES = 1000;
@@ -95,9 +98,12 @@ export class Room extends DurableObject<Env> {
   private roomName = '';
   private lastDropped = 0;
   private lastSounds = 0;
-  private lastSave = 0;
   private dirty = false;
-  private tickCount = 0;
+  private lastBroadcast = 0;
+  private broadcastTimer: ReturnType<typeof setTimeout> | null = null;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Start of the current dropped-frames-per-second bucket (0 = not started). */
+  private historyAt = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -120,7 +126,6 @@ export class Room extends DurableObject<Env> {
     if (request.headers.get('Upgrade') === 'websocket') {
       const pair = new WebSocketPair();
       this.ctx.acceptWebSocket(pair[1]);
-      await this.ensureTicking();
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     if (url.pathname.endsWith('.csv')) return this.csv();
@@ -175,7 +180,7 @@ export class Room extends DurableObject<Env> {
         ws.serializeAttachment({ id, role: 'player', presenter: false } satisfies Attachment);
         this.send(ws, { t: 'welcome', presenter: false, team: d.team });
       }
-      this.dirty = true;
+      this.changed();
       return;
     }
 
@@ -208,7 +213,7 @@ export class Room extends DurableObject<Env> {
       } else if (msg.t === 'sound') {
         d.sounds += Math.min(num(msg.n, 1000), 1000);
       }
-      this.dirty = true;
+      this.changed();
       return;
     }
 
@@ -232,6 +237,8 @@ export class Room extends DurableObject<Env> {
         d.lastUpdate = 0;
       }
       this.broadcast({ t: 'go', ...round }, 'player');
+      // The only timer: runs while the round is on, then stops (see alarm()).
+      void this.ctx.storage.setAlarm(now + ROUND_TICK_MS);
     } else if (msg.t === 'stop') {
       if (this.state.round) this.state.round.stopped = true;
       this.broadcast({ t: 'stop' }, 'player');
@@ -242,8 +249,9 @@ export class Room extends DurableObject<Env> {
       this.lastSounds = 0;
       // Phones still connected join again (and get a team again).
       this.broadcast({ t: 'rejoin' }, 'player');
+      this.historyAt = 0;
     }
-    this.dirty = true;
+    this.changed();
   }
 
   async webSocketClose(ws: WebSocket) {
@@ -252,11 +260,11 @@ export class Room extends DurableObject<Env> {
     } catch {
       // already closed
     }
-    this.dirty = true;
+    this.changed();
   }
 
   async webSocketError() {
-    this.dirty = true;
+    this.changed();
   }
 
   /**
@@ -273,12 +281,77 @@ export class Room extends DurableObject<Env> {
     return smallest[Math.floor(Math.random() * smallest.length)];
   }
 
-  // ── Tick: live snapshot to everyone, history, persistence ────────────
-  async alarm() {
-    const sockets = this.ctx.getWebSockets();
+  // ── Event-driven updates ──────────────────────────────────────────────
+  //
+  // Cloudflare counts every alarm as a request (100,000 a day on the free
+  // plan), so nothing ticks while the room is idle. Changes schedule a
+  // snapshot (at most one per BROADCAST_MS); an alarm runs once a second only
+  // while a round is on. With nothing happening the room can hibernate, even
+  // with screens and phones connected.
+
+  /** Something changed: push a snapshot soon, and save soon. */
+  private changed() {
+    this.dirty = true;
+    this.scheduleBroadcast();
+    this.scheduleSave();
+  }
+
+  private scheduleBroadcast() {
+    if (this.broadcastTimer) return;
+    const wait = Math.max(0, this.lastBroadcast + BROADCAST_MS - Date.now());
+    this.broadcastTimer = setTimeout(() => {
+      this.broadcastTimer = null;
+      this.pushSnapshot();
+    }, wait);
+  }
+
+  private scheduleSave() {
+    if (this.saveTimer) return;
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      if (!this.dirty) return;
+      this.dirty = false;
+      void this.ctx.storage.put('state', this.state);
+    }, SAVE_EVERY_MS);
+  }
+
+  /** Round rules, history, then one snapshot to every connected screen and phone. */
+  private pushSnapshot() {
     const now = Date.now();
-    this.tickCount++;
-    // Time limit: stop every phone at once, so all teams get the same window.
+    this.roundRules(now);
+    const snap = this.snapshot();
+    // Dropped frames per second: one bucket per elapsed second; idle gaps are zeros.
+    if (!this.historyAt) {
+      this.historyAt = now;
+      this.lastDropped = snap.totals.dropped;
+      this.lastSounds = snap.sounds;
+    } else {
+      const secs = Math.floor((now - this.historyAt) / 1000);
+      if (secs >= 1) {
+        const gap = Math.min(secs - 1, HISTORY_SECONDS);
+        const zeros = Array(gap).fill(0);
+        this.state.dropsPerSec = [...this.state.dropsPerSec, ...zeros, Math.max(0, snap.totals.dropped - this.lastDropped)].slice(-HISTORY_SECONDS);
+        this.state.soundsPerSec = [...this.state.soundsPerSec, ...zeros, Math.max(0, snap.sounds - this.lastSounds)].slice(-HISTORY_SECONDS);
+        this.lastDropped = snap.totals.dropped;
+        this.lastSounds = snap.sounds;
+        this.historyAt += secs * 1000;
+        snap.dropsPerSec = this.state.dropsPerSec;
+        snap.soundsPerSec = this.state.soundsPerSec;
+      }
+    }
+    const text = JSON.stringify(snap);
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.send(text);
+      } catch {
+        // closing
+      }
+    }
+    this.lastBroadcast = now;
+  }
+
+  /** Time limit (stop every phone at once) and dropped-out phones. */
+  private roundRules(now: number) {
     const r = this.state.round;
     if (r && r.limitMs > 0 && !r.stopped && now - r.startedAt >= r.limitMs) {
       r.stopped = true;
@@ -286,40 +359,18 @@ export class Room extends DurableObject<Env> {
       this.dirty = true;
     }
     this.settleRound(now);
-    const snap = this.snapshot();
-    if (this.tickCount === 1) {
-      // Fresh instance: start the per-second history from current totals.
-      this.lastDropped = snap.totals.dropped;
-      this.lastSounds = snap.sounds;
-    }
-    if (this.tickCount % Math.round(1000 / TICK_MS) === 0) {
-      this.state.dropsPerSec = [...this.state.dropsPerSec, Math.max(0, snap.totals.dropped - this.lastDropped)].slice(-HISTORY_SECONDS);
-      this.state.soundsPerSec = [...this.state.soundsPerSec, Math.max(0, snap.sounds - this.lastSounds)].slice(-HISTORY_SECONDS);
-      this.lastDropped = snap.totals.dropped;
-      this.lastSounds = snap.sounds;
-      this.dirty = true;
-    }
-    if (sockets.length) {
-      const text = JSON.stringify(snap);
-      for (const ws of sockets) {
-        try {
-          ws.send(text);
-        } catch {
-          // closing
-        }
-      }
-    }
-    if (this.dirty && now - this.lastSave > SAVE_EVERY_MS) {
-      await this.ctx.storage.put('state', this.state);
-      this.lastSave = now;
-      this.dirty = false;
-    }
-    if (sockets.length) await this.ctx.storage.setAlarm(now + TICK_MS);
-    else if (this.dirty) await this.ctx.storage.put('state', this.state);
   }
 
-  private async ensureTicking() {
-    if ((await this.ctx.storage.getAlarm()) == null) await this.ctx.storage.setAlarm(Date.now() + TICK_MS);
+  /** Runs only while a round is on: countdown, limit, stalls; stops once it's complete. */
+  async alarm() {
+    this.pushSnapshot();
+    this.scheduleSave();
+    const result = this.snapshot().result;
+    if (this.state.round && result && !result.complete) await this.ctx.storage.setAlarm(Date.now() + ROUND_TICK_MS);
+    else if (this.dirty) {
+      this.dirty = false;
+      await this.ctx.storage.put('state', this.state);
+    }
   }
 
   /** Taking part in the current round and not finished or out yet. */
