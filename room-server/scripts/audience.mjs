@@ -28,7 +28,6 @@ for (let i = 0; i < N; i++) {
       run.frames += 60; run.dropped += d; run.slow += Math.round(d / 2); run.long += Math.round(d / 6);
       run.commits += COMMITS[strategy]; run.renderMs += COMMITS[strategy] * MS[strategy] * slow; run.worst = Math.max(run.worst, 16 + d * 3);
       ws.send(JSON.stringify({ t: 'live', run }));
-      ws.send(JSON.stringify({ t: 'sound', n: Math.min(d, 3) }));
       await sleep(1000);
     }
     ws.send(JSON.stringify({ t: 'final', run }));
